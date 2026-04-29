@@ -1,17 +1,10 @@
-# zentask
+# Zentask
 
-A new Flutter project.
+Proyecto de Expoandes
 
-## Getting Started
+## ¿Qué es Zentask?
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Zentask es una app para celulares enfocada en ayudar a estudiantes universitarios
+a combatir la procastinación mediante un sistema interactivo y personalizable
+en el cual, al completar tareas, el usuario recibe un gato virtual como recompensa.
+Estos gatos se añaden a un jardín virtual desde el cual el usuario puede observarlos.
