@@ -2,7 +2,8 @@
 import 'package:flutter/material.dart';
 import 'crear_tarea_screen.dart'; // La pantalla de tus amigos
 import 'inicio_screen.dart';      // Tu nueva pantalla
-import 'ajustes_screen.dart';     // Tu nueva pantalla
+import 'ajustes_screen.dart'; 
+import 'gaticos_screen.dart';    // Tu nueva pantalla
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -15,11 +16,11 @@ class _MainScreenState extends State<MainScreen> {
   // Empezamos en la pestaña 0 (Inicio)
   int _currentIndex = 0;
 
-  // IndexedStack evita que se recarguen al cambiar de pestaña
+  // Aquí metemos las 3 pantallas. ¡IndexedStack evita que se recarguen al cambiar de pestaña!
   final List<Widget> _screens = [
     const InicioScreen(),
     const CrearTareaScreen(),
-    const Placeholder(), // TODO: reemplazar por GaticosScreen cuando esté lista
+    const GaticosScreen(), // <-- El código de tus amigos intacto aquí
     const AjustesScreen(),
   ];
 

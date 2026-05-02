@@ -40,7 +40,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
             subtitle: const Text('usuario@zentask.app'),
             trailing: const Icon(Icons.edit_outlined),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            // TODO: navegar a EditarPerfilScreen
+            // /TODO: navegar a EditarPerfilScreen 
             onTap: () {},
           ),
 

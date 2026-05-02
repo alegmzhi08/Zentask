@@ -166,8 +166,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> {
                             ),
                           );
                         },
-                      ))
-                  .toList(),
+                      )),
 
             const SizedBox(height: 20),
 
@@ -604,7 +603,7 @@ class _BannerHoy extends StatelessWidget {
               height: 36,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.25),
+                color: Colors.white.withValues(alpha: 0.25),
               ),
               child: const Icon(
                 Icons.arrow_forward_ios,
