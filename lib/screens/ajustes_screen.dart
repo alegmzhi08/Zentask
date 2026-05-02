@@ -1,5 +1,6 @@
 // lib/screens/ajustes_screen.dart
 import 'package:flutter/material.dart';
+import '../services/settings_service.dart';
 
 class AjustesScreen extends StatefulWidget {
   const AjustesScreen({super.key});
@@ -9,11 +10,16 @@ class AjustesScreen extends StatefulWidget {
 }
 
 class _AjustesScreenState extends State<AjustesScreen> {
-  // Estado visual temporal — migrar a Riverpod/Provider cuando se integre
   bool _modoOscuro = false;
   bool _modoEstricto = false;
   bool _recordatorios = true;
   bool _notificacionesRacha = true;
+
+  @override
+  void initState() {
+    super.initState();
+    SettingsService.instance.init();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +46,6 @@ class _AjustesScreenState extends State<AjustesScreen> {
             subtitle: const Text('usuario@zentask.app'),
             trailing: const Icon(Icons.edit_outlined),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            // /TODO: navegar a EditarPerfilScreen 
             onTap: () {},
           ),
 
@@ -50,7 +55,6 @@ class _AjustesScreenState extends State<AjustesScreen> {
             secondary: const Icon(Icons.dark_mode_outlined),
             title: const Text('Modo Oscuro'),
             value: _modoOscuro,
-            // TODO: conectar con ThemeProvider o Riverpod para cambiar el tema globalmente
             onChanged: (value) => setState(() => _modoOscuro = value),
           ),
           ListTile(
@@ -72,26 +76,33 @@ class _AjustesScreenState extends State<AjustesScreen> {
                 const Icon(Icons.chevron_right),
               ],
             ),
-            // TODO: abrir ColorPickerDialog cuando se implemente personalización de temas
             onTap: () {},
           ),
 
           // ── PRODUCTIVIDAD Y ENFOQUE ────────────────────────────────────────
           _buildSectionHeader('Productividad y Enfoque'),
-          ListTile(
-            leading: const Icon(Icons.timer_outlined),
-            title: const Text('Duración del Pomodoro'),
-            subtitle: const Text('25 min trabajo / 5 min descanso'),
-            trailing: const Icon(Icons.chevron_right),
-            // TODO: abrir PomodoroConfigScreen o un BottomSheet con sliders
-            onTap: () {},
+          ListenableBuilder(
+            listenable: Listenable.merge([
+              SettingsService.instance.pomodoroDuration,
+              SettingsService.instance.breakDuration,
+            ]),
+            builder: (context, _) {
+              final work = SettingsService.instance.pomodoroDuration.value;
+              final brk = SettingsService.instance.breakDuration.value;
+              return ListTile(
+                leading: const Icon(Icons.timer_outlined),
+                title: const Text('Duración del Pomodoro'),
+                subtitle: Text('$work min trabajo / $brk min descanso'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _abrirConfigPomodoro(context),
+              );
+            },
           ),
           SwitchListTile(
             secondary: const Icon(Icons.shield_outlined),
             title: const Text('Modo Estricto'),
             subtitle: const Text('Bloquea distracciones durante sesiones'),
             value: _modoEstricto,
-            // TODO: integrar con un servicio de control de foco (FocusMode API en iOS/Android)
             onChanged: (value) => setState(() => _modoEstricto = value),
           ),
           SwitchListTile(
@@ -99,7 +110,6 @@ class _AjustesScreenState extends State<AjustesScreen> {
             title: const Text('Recordatorios de Tareas'),
             subtitle: const Text('Notificaciones antes de la fecha de entrega'),
             value: _recordatorios,
-            // TODO: conectar con flutter_local_notifications
             onChanged: (value) => setState(() => _recordatorios = value),
           ),
 
@@ -110,7 +120,6 @@ class _AjustesScreenState extends State<AjustesScreen> {
             title: const Text('Notificaciones de Racha'),
             subtitle: const Text('Recibe motivación para mantener tu racha diaria'),
             value: _notificacionesRacha,
-            // TODO: conectar con el sistema de rachas en Firestore
             onChanged: (value) => setState(() => _notificacionesRacha = value),
           ),
           ListTile(
@@ -118,7 +127,6 @@ class _AjustesScreenState extends State<AjustesScreen> {
             title: const Text('Meta Diaria'),
             subtitle: const Text('Completar 3 tareas'),
             trailing: const Icon(Icons.chevron_right),
-            // TODO: abrir MetaDiariaSheet para que el usuario defina su objetivo
             onTap: () {},
           ),
 
@@ -135,20 +143,17 @@ class _AjustesScreenState extends State<AjustesScreen> {
             ),
             subtitle: const Text('Desbloquea todas las funciones de Zentask'),
             trailing: Icon(Icons.chevron_right, color: colorScheme.primary),
-            // TODO: navegar a PremiumScreen o abrir RevenueCat paywall
             onTap: () {},
           ),
           const Divider(indent: 16, endIndent: 16),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
             title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
-            // TODO: llamar a FirebaseAuth.instance.signOut() y navegar a LoginScreen
             onTap: () => _confirmarAccionDestructiva(
               context,
               titulo: 'Cerrar sesión',
               mensaje: '¿Seguro que quieres cerrar sesión?',
               etiquetaBoton: 'Cerrar sesión',
-              // TODO: FirebaseAuth.instance.signOut()
               onConfirmar: () {},
             ),
           ),
@@ -159,7 +164,6 @@ class _AjustesScreenState extends State<AjustesScreen> {
               'Acción irreversible',
               style: TextStyle(color: Colors.red, fontSize: 12),
             ),
-            // TODO: llamar a user.delete() en Firebase Auth y borrar datos en Firestore
             onTap: () => _confirmarAccionDestructiva(
               context,
               titulo: 'Eliminar cuenta',
@@ -190,6 +194,18 @@ class _AjustesScreenState extends State<AjustesScreen> {
     );
   }
 
+  void _abrirConfigPomodoro(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const _PomodoroConfigSheet(),
+    );
+  }
+
   void _confirmarAccionDestructiva(
     BuildContext context, {
     required String titulo,
@@ -217,6 +233,171 @@ class _AjustesScreenState extends State<AjustesScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Bottom Sheet de configuración Pomodoro ─────────────────────────────────────
+
+class _PomodoroConfigSheet extends StatefulWidget {
+  const _PomodoroConfigSheet();
+
+  @override
+  State<_PomodoroConfigSheet> createState() => _PomodoroConfigSheetState();
+}
+
+class _PomodoroConfigSheetState extends State<_PomodoroConfigSheet> {
+  late int _trabajo;
+  late int _descanso;
+
+  @override
+  void initState() {
+    super.initState();
+    _trabajo = SettingsService.instance.pomodoroDuration.value;
+    _descanso = SettingsService.instance.breakDuration.value;
+  }
+
+  void _guardar() {
+    SettingsService.instance.setPomodoroDuration(_trabajo);
+    SettingsService.instance.setBreakDuration(_descanso);
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Text(
+            'Duración del Pomodoro',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 28),
+          _DurationRow(
+            label: 'Tiempo de trabajo',
+            value: _trabajo,
+            unit: 'min',
+            canDecrement: _trabajo > SettingsService.minPomodoroDuration,
+            canIncrement: _trabajo < SettingsService.maxPomodoroDuration,
+            onDecrement: () => setState(() {
+              _trabajo = (_trabajo - 5).clamp(
+                SettingsService.minPomodoroDuration,
+                SettingsService.maxPomodoroDuration,
+              );
+            }),
+            onIncrement: () => setState(() {
+              _trabajo = (_trabajo + 5).clamp(
+                SettingsService.minPomodoroDuration,
+                SettingsService.maxPomodoroDuration,
+              );
+            }),
+          ),
+          const SizedBox(height: 20),
+          _DurationRow(
+            label: 'Descanso corto',
+            value: _descanso,
+            unit: 'min',
+            canDecrement: _descanso > SettingsService.minBreakDuration,
+            canIncrement: _descanso < SettingsService.maxBreakDuration,
+            onDecrement: () => setState(() {
+              _descanso = (_descanso - 1).clamp(
+                SettingsService.minBreakDuration,
+                SettingsService.maxBreakDuration,
+              );
+            }),
+            onIncrement: () => setState(() {
+              _descanso = (_descanso + 1).clamp(
+                SettingsService.minBreakDuration,
+                SettingsService.maxBreakDuration,
+              );
+            }),
+          ),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _guardar,
+              style: FilledButton.styleFrom(
+                backgroundColor: colorScheme.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: const Text('Guardar', style: TextStyle(fontSize: 16)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DurationRow extends StatelessWidget {
+  const _DurationRow({
+    required this.label,
+    required this.value,
+    required this.unit,
+    required this.onDecrement,
+    required this.onIncrement,
+    required this.canDecrement,
+    required this.canIncrement,
+  });
+
+  final String label;
+  final int value;
+  final String unit;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+  final bool canDecrement;
+  final bool canIncrement;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+          ),
+        ),
+        IconButton(
+          onPressed: canDecrement ? onDecrement : null,
+          icon: const Icon(Icons.remove_circle_outline),
+          color: const Color(0xFF8DC49A),
+        ),
+        SizedBox(
+          width: 64,
+          child: Text(
+            '$value $unit',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        ),
+        IconButton(
+          onPressed: canIncrement ? onIncrement : null,
+          icon: const Icon(Icons.add_circle_outline),
+          color: const Color(0xFF8DC49A),
+        ),
+      ],
     );
   }
 }

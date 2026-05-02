@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import '../models/tarea.dart';
 import '../services/economy_service.dart';
 import '../services/streak_service.dart';
+import '../services/task_service.dart';
 import '../widgets/streak_fire.dart';
 import '../widgets/zencoins_badge.dart';
 import '../widgets/zencoins_reward.dart';
+import '../services/settings_service.dart';
 
 class InicioScreen extends StatefulWidget {
   const InicioScreen({super.key});
@@ -17,52 +19,20 @@ class InicioScreen extends StatefulWidget {
 
 class _InicioScreenState extends State<InicioScreen> {
   // ── Timer Pomodoro ────────────────────────────────────────────────────────
-  static const int _trabajoSeg = 25 * 60;
-  static const int _descansoCortaSeg = 5 * 60;
   static const int _descansoLargoSeg = 15 * 60;
   static const Color _colorTrabajo = Color(0xFF8DC49A);
 
   Timer? _timer;
-  int _segundosRestantes = _trabajoSeg;
+  int _segundosRestantes = SettingsService.defaultPomodoroDuration * 60;
   bool _corriendo = false;
   bool _esTrabajo = true;
   int _pomodorosEnCiclo = 0;
 
   int get _duracionTotal => _esTrabajo
-      ? _trabajoSeg
-      : (_pomodorosEnCiclo == 0 ? _descansoLargoSeg : _descansoCortaSeg);
-
-  // ── Tareas de hoy ─────────────────────────────────────────────────────────
-  // TODO: reemplazar con StreamBuilder que escuche Firestore
-  final List<Tarea> _tareasHoy = [
-    Tarea(
-      id: 'demo_1',
-      nombre: 'Leer capítulo 5',
-      materia: 'Cálculo III',
-      fechaEntrega: DateTime.now(),
-      diasTrabajo: ['Lu', 'Mi'],
-      tiempoSesion: 25,
-      sesionesPorDia: 2,
-    ),
-    Tarea(
-      id: 'demo_2',
-      nombre: 'Resolver ejercicios',
-      materia: 'Estadística',
-      fechaEntrega: DateTime.now(),
-      diasTrabajo: ['Ma', 'Ju'],
-      tiempoSesion: 25,
-      sesionesPorDia: 1,
-    ),
-    Tarea(
-      id: 'demo_3',
-      nombre: 'Ensayo de introducción',
-      materia: 'Español',
-      fechaEntrega: DateTime.now(),
-      diasTrabajo: ['Vi'],
-      tiempoSesion: 30,
-      sesionesPorDia: 1,
-    ),
-  ];
+      ? SettingsService.instance.pomodoroDuration.value * 60
+      : (_pomodorosEnCiclo == 0
+            ? _descansoLargoSeg
+            : SettingsService.instance.breakDuration.value * 60);
 
   // ── Métodos del timer ─────────────────────────────────────────────────────
   void _iniciarPausar() {
@@ -105,11 +75,10 @@ class _InicioScreenState extends State<InicioScreen> {
 
     // Recompensa solo al completar una sesión de trabajo
     if (eraTrabajoAntes && mounted) {
-      await EconomyService.instance.rewardFocusMinutes(
-        EconomyService.porSesionPomodoro,
-      );
+      final mins = SettingsService.instance.pomodoroDuration.value;
+      await EconomyService.instance.rewardFocusMinutes(mins);
       if (!mounted) return;
-      ZenCoinsReward.show(context, EconomyService.porSesionPomodoro);
+      ZenCoinsReward.show(context, mins * EconomyService.coinsPerFocusMinute);
     }
 
     final mensaje = _esTrabajo ? '¡A trabajar! 💪' : '¡Tómate un descanso! ☕';
@@ -120,10 +89,19 @@ class _InicioScreenState extends State<InicioScreen> {
     }
   }
 
+  void _onSettingsChanged() {
+    _timer?.cancel();
+    setState(() {
+      _corriendo = false;
+      _segundosRestantes = _duracionTotal;
+    });
+  }
+
   // ── Métodos de tareas ─────────────────────────────────────────────────────
-  Future<void> _completarTarea(int index) async {
-    if (_tareasHoy[index].completada) return;
-    setState(() => _tareasHoy[index].completada = true);
+  Future<void> _completarTarea(Tarea tarea, DateTime day) async {
+    if (tarea.isCompletedOn(day)) return;
+
+    await TaskService.instance.completarEnFecha(tarea.id, day);
     // La racha se actualiza primero para que el multiplicador esté vigente
     await StreakService.instance.recordActivity();
     if (!mounted) return;
@@ -153,11 +131,20 @@ class _InicioScreenState extends State<InicioScreen> {
   void initState() {
     super.initState();
     StreakService.instance.init();
+    SettingsService.instance.init();
+    TaskService.instance.init();
+    _segundosRestantes = SettingsService.instance.pomodoroDuration.value * 60;
+    SettingsService.instance.pomodoroDuration.addListener(_onSettingsChanged);
+    SettingsService.instance.breakDuration.addListener(_onSettingsChanged);
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    SettingsService.instance.pomodoroDuration.removeListener(
+      _onSettingsChanged,
+    );
+    SettingsService.instance.breakDuration.removeListener(_onSettingsChanged);
     super.dispose();
   }
 
@@ -463,122 +450,134 @@ class _InicioScreenState extends State<InicioScreen> {
             ),
           ),
         ),
-        if (_tareasHoy.isEmpty)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                '¡Sin tareas por hoy! 🎉',
-                style: TextStyle(color: Color(0xFF7D9882)),
-              ),
-            ),
-          )
-        else
-          ..._tareasHoy.asMap().entries.map((entry) {
-            final i = entry.key;
-            final tarea = entry.value;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: GestureDetector(
-                onTap: () => _completarTarea(i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: tarea.completada
-                        ? const Color(0xFFEAF4EB)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: tarea.completada
-                          ? const Color(0xFF8DC49A)
-                          : const Color(0xFFE8E8E8),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      // Checkbox circular animado
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        width: 26,
-                        height: 26,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: tarea.completada
-                              ? const Color(0xFF8DC49A)
-                              : Colors.transparent,
-                          border: Border.all(
-                            color: tarea.completada
-                                ? const Color(0xFF8DC49A)
-                                : const Color(0xFFD6E8D8),
-                            width: 2,
-                          ),
-                        ),
-                        child: tarea.completada
-                            ? const Icon(
-                                Icons.check_rounded,
-                                size: 16,
-                                color: Colors.white,
-                              )
-                            : null,
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            AnimatedDefaultTextStyle(
-                              duration: const Duration(milliseconds: 300),
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: tarea.completada
-                                    ? const Color(0xFF7D9882)
-                                    : const Color(0xFF3A4A3E),
-                                decoration: tarea.completada
-                                    ? TextDecoration.lineThrough
-                                    : TextDecoration.none,
-                                decorationColor: const Color(0xFF7D9882),
-                              ),
-                              child: Text(tarea.nombre),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              tarea.materia,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF7D9882),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        child: tarea.completada
-                            ? const Text(
-                                '🐟',
-                                key: ValueKey('done'),
-                                style: TextStyle(fontSize: 18),
-                              )
-                            : const Icon(
-                                Icons.chevron_right,
-                                key: ValueKey('pending'),
-                                color: Color(0xFFD6E8D8),
-                                size: 20,
-                              ),
-                      ),
-                    ],
+        ValueListenableBuilder<List<Tarea>>(
+          valueListenable: TaskService.instance.tareas,
+          builder: (context, tareas, _) {
+            final today = DateTime.now();
+            final tareasHoy = TaskService.instance.getTasksForDate(today);
+
+            if (tareasHoy.isEmpty) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    '¡Día libre! No tienes tareas para hoy',
+                    style: TextStyle(color: Color(0xFF7D9882)),
                   ),
                 ),
-              ),
+              );
+            }
+
+            return Column(
+              children: tareasHoy.map((tarea) {
+                final completada = tarea.isCompletedOn(today);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: GestureDetector(
+                    onTap: completada
+                        ? null
+                        : () => _completarTarea(tarea, today),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: completada
+                            ? const Color(0xFFEAF4EB)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: completada
+                              ? const Color(0xFF8DC49A)
+                              : const Color(0xFFE8E8E8),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          // Checkbox circular animado
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 250),
+                            width: 26,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: completada
+                                  ? const Color(0xFF8DC49A)
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: completada
+                                    ? const Color(0xFF8DC49A)
+                                    : const Color(0xFFD6E8D8),
+                                width: 2,
+                              ),
+                            ),
+                            child: completada
+                                ? const Icon(
+                                    Icons.check_rounded,
+                                    size: 16,
+                                    color: Colors.white,
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 300),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: completada
+                                        ? const Color(0xFF7D9882)
+                                        : const Color(0xFF3A4A3E),
+                                    decoration: completada
+                                        ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                    decorationColor: const Color(0xFF7D9882),
+                                  ),
+                                  child: Text(tarea.nombre),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  tarea.materia,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF7D9882),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            child: completada
+                                ? const Text(
+                                    '🐟',
+                                    key: ValueKey('done'),
+                                    style: TextStyle(fontSize: 18),
+                                  )
+                                : const Icon(
+                                    Icons.chevron_right,
+                                    key: ValueKey('pending'),
+                                    color: Color(0xFFD6E8D8),
+                                    size: 20,
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             );
-          }),
+          },
+        ),
       ],
     );
   }
