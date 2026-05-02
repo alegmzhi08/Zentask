@@ -15,10 +15,11 @@ class _MainScreenState extends State<MainScreen> {
   // Empezamos en la pestaña 0 (Inicio)
   int _currentIndex = 0;
 
-  // Aquí metemos las 3 pantallas. ¡IndexedStack evita que se recarguen al cambiar de pestaña!
+  // IndexedStack evita que se recarguen al cambiar de pestaña
   final List<Widget> _screens = [
     const InicioScreen(),
-    const CrearTareaScreen(), // <-- El código de tus amigos intacto aquí
+    const CrearTareaScreen(),
+    const Placeholder(), // TODO: reemplazar por GaticosScreen cuando esté lista
     const AjustesScreen(),
   ];
 
@@ -39,9 +40,11 @@ class _MainScreenState extends State<MainScreen> {
         // Usamos el color verde de tu tema para el ícono seleccionado
         selectedItemColor: Theme.of(context).colorScheme.primary,
         unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Inicio'),
           BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Nueva Tarea'),
+          BottomNavigationBarItem(icon: Icon(Icons.pets), label: 'Gaticos'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Ajustes'),
         ],
       ),

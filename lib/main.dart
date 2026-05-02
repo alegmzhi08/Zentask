@@ -27,13 +27,16 @@ class ZentaskApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: StreamBuilder<User?>(
+      /*BYPASS TEMPORAL */
+      home: const MainScreen(),
+      /*CODIGO ORIGINAL COMENTADO: home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
           if (snapshot.hasData) return const MainScreen();
           return const LoginScreen();
         },
       ),
+      */
     );
   }
 }
