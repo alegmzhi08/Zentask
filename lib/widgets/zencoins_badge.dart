@@ -1,5 +1,6 @@
 // lib/widgets/zencoins_badge.dart
 import 'package:flutter/material.dart';
+import '../screens/wallet_screen.dart';
 import '../services/economy_service.dart';
 
 /// Indicador de saldo de ZenCoins para el AppBar.
@@ -12,7 +13,13 @@ class ZenCoinsBadge extends StatelessWidget {
     return ValueListenableBuilder<int>(
       valueListenable: EconomyService.instance.balance,
       builder: (context, saldo, _) {
-        return _Badge(saldo: saldo);
+        return GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const WalletScreen()),
+          ),
+          child: _Badge(saldo: saldo),
+        );
       },
     );
   }
