@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/tarea.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CrearTareaScreen extends StatefulWidget {
   const CrearTareaScreen({super.key});
@@ -20,35 +21,37 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
   final List<String> _diasSemana = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'];
   final List<bool> _diasSeleccionados = List.filled(7, false);
 
-  void _guardarTarea() {
-    // Validación básica
-    if (_nombreCtrl.text.isEmpty || _materiaCtrl.text.isEmpty || _fechaEntrega == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor completa todos los campos')),
-      );
-      return;
-    }
-
-    final diasElegidos = <String>[];
-    for (int i = 0; i < _diasSemana.length; i++) {
-      if (_diasSeleccionados[i]) diasElegidos.add(_diasSemana[i]);
-    }
-
-    final nuevaTarea = Tarea(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      nombre: _nombreCtrl.text,
-      materia: _materiaCtrl.text,
-      fechaEntrega: _fechaEntrega!,
-      diasTrabajo: diasElegidos,
-      tiempoSesion: _tiempoSesion,
-      sesionesPorDia: _sesionesPorDia,
+  void _guardarTarea() async {
+  if (_nombreCtrl.text.isEmpty || _materiaCtrl.text.isEmpty || _fechaEntrega == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Por favor completa todos los campos')),
     );
-
-    // Por ahora solo imprime en consola — luego se conecta a la base de datos
-    debugPrint('Tarea creada: ${nuevaTarea.nombre}');
-
-    Navigator.pop(context, nuevaTarea);
+    return;
   }
+
+  final diasElegidos = <String>[];
+  for (int i = 0; i < _diasSemana.length; i++) {
+    if (_diasSeleccionados[i]) diasElegidos.add(_diasSemana[i]);
+  }
+
+  final uid = FirebaseAuth.instance.currentUser!.uid;
+
+  await FirebaseFirestore.instance
+      .collection('usuarios')
+      .doc(uid)
+      .collection('tareas')
+      .add({
+    'nombre': _nombreCtrl.text,
+    'materia': _materiaCtrl.text,
+    'fechaEntrega': _fechaEntrega!.toIso8601String(),
+    'diasTrabajo': diasElegidos,
+    'tiempoSesion': _tiempoSesion,
+    'sesionesPorDia': _sesionesPorDia,
+  });
+
+  if (context.mounted) Navigator.pop(context);
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +63,15 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
         title: const Text('Nueva tarea',
             style: TextStyle(color: Color(0xFF3A4A3E), fontWeight: FontWeight.w500)),
         iconTheme: const IconThemeData(color: Color(0xFF3A4A3E)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Color(0xFF7D9882)),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+            },
+          ),
+        ],
+
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
