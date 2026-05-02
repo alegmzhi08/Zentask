@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'screens/crear_tarea_screen.dart';
+import 'screens/login_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const ZentaskApp());
 }
 
@@ -19,7 +27,13 @@ class ZentaskApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: CrearTareaScreen(),
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.hasData) return CrearTareaScreen();
+          return const LoginScreen();
+        },
+      ),
     );
   }
 }
