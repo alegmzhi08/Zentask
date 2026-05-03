@@ -1,5 +1,7 @@
 // lib/screens/ajustes_screen.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'login_screen.dart';
 
 class AjustesScreen extends StatefulWidget {
   const AjustesScreen({super.key});
@@ -33,11 +35,19 @@ class _AjustesScreenState extends State<AjustesScreen> {
               backgroundColor: Color(0xFF8DC49A),
               child: Icon(Icons.person, color: Colors.white, size: 26),
             ),
-            title: const Text(
-              'Usuario Zentask',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            subtitle: const Text('usuario@zentask.app'),
+            title: FutureBuilder<void>(
+  future: FirebaseAuth.instance.currentUser?.reload(),
+  builder: (context, snapshot) {
+    return Text(
+      FirebaseAuth.instance.currentUser?.displayName ??
+      FirebaseAuth.instance.currentUser?.email?.split('@')[0] ??
+      'Usuario',
+      style: const TextStyle(fontWeight: FontWeight.w600),
+    );
+  },
+),
+            subtitle: Text(
+              FirebaseAuth.instance.currentUser?.email ?? 'Sin correo'),
             trailing: const Icon(Icons.edit_outlined),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             // TODO: navegar a EditarPerfilScreen
@@ -148,8 +158,9 @@ class _AjustesScreenState extends State<AjustesScreen> {
               titulo: 'Cerrar sesión',
               mensaje: '¿Seguro que quieres cerrar sesión?',
               etiquetaBoton: 'Cerrar sesión',
-              // TODO: FirebaseAuth.instance.signOut()
-              onConfirmar: () {},
+              onConfirmar: () async {
+                await FirebaseAuth.instance.signOut();
+              },
             ),
           ),
           ListTile(
@@ -166,7 +177,28 @@ class _AjustesScreenState extends State<AjustesScreen> {
               mensaje:
                   'Esta acción es permanente. Se eliminarán todos tus datos, tareas y gatos virtuales.',
               etiquetaBoton: 'Eliminar para siempre',
-              onConfirmar: () {},
+              onConfirmar: () async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    await user?.delete();
+    if (context.mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
+  } on FirebaseAuthException catch (e) {
+    if (e.code == 'requires-recent-login') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por seguridad debes iniciar sesión de nuevo antes de eliminar tu cuenta'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      await FirebaseAuth.instance.signOut();
+    }
+  }
+},
             ),
           ),
           const SizedBox(height: 32),
@@ -220,3 +252,4 @@ class _AjustesScreenState extends State<AjustesScreen> {
     );
   }
 }
+

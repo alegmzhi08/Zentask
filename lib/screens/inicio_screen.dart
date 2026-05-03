@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class InicioScreen extends StatefulWidget {
   const InicioScreen({super.key});
@@ -87,7 +88,7 @@ class _InicioScreenState extends State<InicioScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Zentask Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Inicio', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: false,
         actions: [
           IconButton(icon: const Icon(Icons.sync), onPressed: () {}),
@@ -104,14 +105,24 @@ class _InicioScreenState extends State<InicioScreen> {
               child: Icon(Icons.person, size: 50, color: Colors.white),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Usuario',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              'Test Zentask #1',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
+            FutureBuilder<void>(
+  future: FirebaseAuth.instance.currentUser?.reload(),
+  builder: (context, snapshot) {
+    final user = FirebaseAuth.instance.currentUser;
+    return Column(
+      children: [
+        Text(
+          user?.displayName ?? user?.email?.split('@')[0] ?? 'Usuario',
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+        Text(
+          user?.email ?? '',
+          style: TextStyle(color: Colors.grey.shade600),
+        ),
+      ],
+    );
+  },
+),
             const SizedBox(height: 28),
 
             // ── Timer Pomodoro
@@ -127,10 +138,10 @@ class _InicioScreenState extends State<InicioScreen> {
               mainAxisSpacing: 12,
               childAspectRatio: 1.4,
               children: [
-                _buildStatCard('Pending Tasks', '0', 'Last 7 days', Colors.amber.shade700),
-                _buildStatCard('Overdue Tasks', '5', 'Total', Colors.red.shade400),
-                _buildStatCard('Tasks Completed', '0', 'Last 7 days', Colors.green.shade600),
-                _buildStatCard('Your Streak', '0', 'Total streak', Colors.orange.shade600),
+                _buildStatCard('Tareas Pendientes', '0', 'Ultimos 7 días', Colors.amber.shade700),
+                _buildStatCard('Tareas Vencidas', '0', 'Total', Colors.red.shade400),
+                _buildStatCard('Tareas Completadas', '0', 'Ultimos 7 días', Colors.green.shade600),
+                _buildStatCard('Tu Racha', '0', 'Racha Total', Colors.orange.shade600),
               ],
             ),
           ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/tarea.dart';
 
 class CrearTareaScreen extends StatefulWidget {
   const CrearTareaScreen({super.key});
@@ -10,7 +10,6 @@ class CrearTareaScreen extends StatefulWidget {
 }
 
 class _CrearTareaScreenState extends State<CrearTareaScreen> {
-  // Controladores: capturan lo que el usuario escribe
   final _nombreCtrl = TextEditingController();
   final _materiaCtrl = TextEditingController();
 
@@ -21,37 +20,34 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
   final List<String> _diasSemana = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'];
   final List<bool> _diasSeleccionados = List.filled(7, false);
 
-  void _guardarTarea() async {
-  if (_nombreCtrl.text.isEmpty || _materiaCtrl.text.isEmpty || _fechaEntrega == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Por favor completa todos los campos')),
+  void _guardarTarea() {
+    if (_nombreCtrl.text.isEmpty ||
+        _materiaCtrl.text.isEmpty ||
+        _fechaEntrega == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor completa todos los campos')),
+      );
+      return;
+    }
+
+    final diasElegidos = <String>[];
+    for (int i = 0; i < _diasSemana.length; i++) {
+      if (_diasSeleccionados[i]) diasElegidos.add(_diasSemana[i]);
+    }
+
+    final nuevaTarea = Tarea(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      nombre: _nombreCtrl.text,
+      materia: _materiaCtrl.text,
+      fechaEntrega: _fechaEntrega!,
+      diasTrabajo: diasElegidos,
+      tiempoSesion: _tiempoSesion,
+      sesionesPorDia: _sesionesPorDia,
     );
-    return;
+
+    debugPrint('Tarea creada: ${nuevaTarea.nombre}');
+    Navigator.pop(context, nuevaTarea);
   }
-
-  final diasElegidos = <String>[];
-  for (int i = 0; i < _diasSemana.length; i++) {
-    if (_diasSeleccionados[i]) diasElegidos.add(_diasSemana[i]);
-  }
-
-  final uid = FirebaseAuth.instance.currentUser!.uid;
-
-  await FirebaseFirestore.instance
-      .collection('usuarios')
-      .doc(uid)
-      .collection('tareas')
-      .add({
-    'nombre': _nombreCtrl.text,
-    'materia': _materiaCtrl.text,
-    'fechaEntrega': _fechaEntrega!.toIso8601String(),
-    'diasTrabajo': diasElegidos,
-    'tiempoSesion': _tiempoSesion,
-    'sesionesPorDia': _sesionesPorDia,
-  });
-
-  if (context.mounted) Navigator.pop(context);
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +57,8 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
         backgroundColor: const Color(0xFFF4FBF5),
         elevation: 0,
         title: const Text('Nueva tarea',
-            style: TextStyle(color: Color(0xFF3A4A3E), fontWeight: FontWeight.w500)),
+            style: TextStyle(
+                color: Color(0xFF3A4A3E), fontWeight: FontWeight.w500)),
         iconTheme: const IconThemeData(color: Color(0xFF3A4A3E)),
         actions: [
           IconButton(
@@ -71,25 +68,20 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             },
           ),
         ],
-
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
-            // ── Nombre
             _label('Nombre de la tarea'),
             _campo(_nombreCtrl, 'Ej. Parcial de Estadística'),
             const SizedBox(height: 16),
 
-            // ── Materia
             _label('Materia'),
             _campo(_materiaCtrl, 'Ej. Cálculo III'),
             const SizedBox(height: 16),
 
-            // ── Fecha de entrega
             _label('Fecha de entrega'),
             GestureDetector(
               onTap: () async {
@@ -106,7 +98,8 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFEAF4EB),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFD6E8D8), width: 1.5),
+                  border: Border.all(
+                      color: const Color(0xFFD6E8D8), width: 1.5),
                 ),
                 child: Text(
                   _fechaEntrega == null
@@ -123,7 +116,6 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ── Tiempo por sesión
             _label('Tiempo por sesión: $_tiempoSesion min'),
             Slider(
               value: _tiempoSesion.toDouble(),
@@ -134,7 +126,6 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ── Sesiones por día
             _label('Sesiones por día: $_sesionesPorDia'),
             Slider(
               value: _sesionesPorDia.toDouble(),
@@ -145,7 +136,6 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ── Días a trabajar
             _label('Días a trabajar'),
             const SizedBox(height: 8),
             Row(
@@ -153,7 +143,8 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
               children: List.generate(7, (i) {
                 final seleccionado = _diasSeleccionados[i];
                 return GestureDetector(
-                  onTap: () => setState(() => _diasSeleccionados[i] = !seleccionado),
+                  onTap: () => setState(
+                      () => _diasSeleccionados[i] = !seleccionado),
                   child: Container(
                     width: 38, height: 38,
                     decoration: BoxDecoration(
@@ -186,7 +177,6 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             ),
             const SizedBox(height: 32),
 
-            // ── Botón guardar
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -212,7 +202,6 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
     );
   }
 
-  // ── Helpers para no repetir código
   Widget _label(String texto) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Text(texto,
@@ -233,15 +222,18 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
           fillColor: const Color(0xFFEAF4EB),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFD6E8D8), width: 1.5),
+            borderSide:
+                const BorderSide(color: Color(0xFFD6E8D8), width: 1.5),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFD6E8D8), width: 1.5),
+            borderSide:
+                const BorderSide(color: Color(0xFFD6E8D8), width: 1.5),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFF8DC49A), width: 1.5),
+            borderSide:
+                const BorderSide(color: Color(0xFF8DC49A), width: 1.5),
           ),
         ),
       );
