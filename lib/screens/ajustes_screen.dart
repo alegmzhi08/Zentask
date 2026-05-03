@@ -1,5 +1,7 @@
 // lib/screens/ajustes_screen.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'login_screen.dart';
 import '../services/settings_service.dart';
 
 class AjustesScreen extends StatefulWidget {
@@ -39,11 +41,19 @@ class _AjustesScreenState extends State<AjustesScreen> {
               backgroundColor: Color(0xFF8DC49A),
               child: Icon(Icons.person, color: Colors.white, size: 26),
             ),
-            title: const Text(
-              'Usuario Zentask',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            subtitle: const Text('usuario@zentask.app'),
+            title: FutureBuilder<void>(
+  future: FirebaseAuth.instance.currentUser?.reload(),
+  builder: (context, snapshot) {
+    return Text(
+      FirebaseAuth.instance.currentUser?.displayName ??
+      FirebaseAuth.instance.currentUser?.email?.split('@')[0] ??
+      'Usuario',
+      style: const TextStyle(fontWeight: FontWeight.w600),
+    );
+  },
+),
+            subtitle: Text(
+              FirebaseAuth.instance.currentUser?.email ?? 'Sin correo'),
             trailing: const Icon(Icons.edit_outlined),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             onTap: () {},
@@ -154,7 +164,9 @@ class _AjustesScreenState extends State<AjustesScreen> {
               titulo: 'Cerrar sesión',
               mensaje: '¿Seguro que quieres cerrar sesión?',
               etiquetaBoton: 'Cerrar sesión',
-              onConfirmar: () {},
+              onConfirmar: () async {
+                await FirebaseAuth.instance.signOut();
+              },
             ),
           ),
           ListTile(
@@ -170,7 +182,28 @@ class _AjustesScreenState extends State<AjustesScreen> {
               mensaje:
                   'Esta acción es permanente. Se eliminarán todos tus datos, tareas y gatos virtuales.',
               etiquetaBoton: 'Eliminar para siempre',
-              onConfirmar: () {},
+              onConfirmar: () async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    await user?.delete();
+    if (context.mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
+  } on FirebaseAuthException catch (e) {
+    if (e.code == 'requires-recent-login') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por seguridad debes iniciar sesión de nuevo antes de eliminar tu cuenta'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      await FirebaseAuth.instance.signOut();
+    }
+  }
+},
             ),
           ),
           const SizedBox(height: 32),
@@ -237,167 +270,3 @@ class _AjustesScreenState extends State<AjustesScreen> {
   }
 }
 
-// ── Bottom Sheet de configuración Pomodoro ─────────────────────────────────────
-
-class _PomodoroConfigSheet extends StatefulWidget {
-  const _PomodoroConfigSheet();
-
-  @override
-  State<_PomodoroConfigSheet> createState() => _PomodoroConfigSheetState();
-}
-
-class _PomodoroConfigSheetState extends State<_PomodoroConfigSheet> {
-  late int _trabajo;
-  late int _descanso;
-
-  @override
-  void initState() {
-    super.initState();
-    _trabajo = SettingsService.instance.pomodoroDuration.value;
-    _descanso = SettingsService.instance.breakDuration.value;
-  }
-
-  void _guardar() {
-    SettingsService.instance.setPomodoroDuration(_trabajo);
-    SettingsService.instance.setBreakDuration(_descanso);
-    Navigator.pop(context);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 8,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Text(
-            'Duración del Pomodoro',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 28),
-          _DurationRow(
-            label: 'Tiempo de trabajo',
-            value: _trabajo,
-            unit: 'min',
-            canDecrement: _trabajo > SettingsService.minPomodoroDuration,
-            canIncrement: _trabajo < SettingsService.maxPomodoroDuration,
-            onDecrement: () => setState(() {
-              _trabajo = (_trabajo - 5).clamp(
-                SettingsService.minPomodoroDuration,
-                SettingsService.maxPomodoroDuration,
-              );
-            }),
-            onIncrement: () => setState(() {
-              _trabajo = (_trabajo + 5).clamp(
-                SettingsService.minPomodoroDuration,
-                SettingsService.maxPomodoroDuration,
-              );
-            }),
-          ),
-          const SizedBox(height: 20),
-          _DurationRow(
-            label: 'Descanso corto',
-            value: _descanso,
-            unit: 'min',
-            canDecrement: _descanso > SettingsService.minBreakDuration,
-            canIncrement: _descanso < SettingsService.maxBreakDuration,
-            onDecrement: () => setState(() {
-              _descanso = (_descanso - 1).clamp(
-                SettingsService.minBreakDuration,
-                SettingsService.maxBreakDuration,
-              );
-            }),
-            onIncrement: () => setState(() {
-              _descanso = (_descanso + 1).clamp(
-                SettingsService.minBreakDuration,
-                SettingsService.maxBreakDuration,
-              );
-            }),
-          ),
-          const SizedBox(height: 32),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _guardar,
-              style: FilledButton.styleFrom(
-                backgroundColor: colorScheme.primary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              child: const Text('Guardar', style: TextStyle(fontSize: 16)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DurationRow extends StatelessWidget {
-  const _DurationRow({
-    required this.label,
-    required this.value,
-    required this.unit,
-    required this.onDecrement,
-    required this.onIncrement,
-    required this.canDecrement,
-    required this.canIncrement,
-  });
-
-  final String label;
-  final int value;
-  final String unit;
-  final VoidCallback onDecrement;
-  final VoidCallback onIncrement;
-  final bool canDecrement;
-  final bool canIncrement;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-          ),
-        ),
-        IconButton(
-          onPressed: canDecrement ? onDecrement : null,
-          icon: const Icon(Icons.remove_circle_outline),
-          color: const Color(0xFF8DC49A),
-        ),
-        SizedBox(
-          width: 64,
-          child: Text(
-            '$value $unit',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-        ),
-        IconButton(
-          onPressed: canIncrement ? onIncrement : null,
-          icon: const Icon(Icons.add_circle_outline),
-          color: const Color(0xFF8DC49A),
-        ),
-      ],
-    );
-  }
-}

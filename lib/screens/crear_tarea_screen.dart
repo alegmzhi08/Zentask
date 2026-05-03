@@ -23,103 +23,34 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
   final List<String> _diasSemana = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'];
   final List<bool> _diasSeleccionados = List.filled(7, false);
 
-  @override
-  void initState() {
-    super.initState();
-    TaskService.instance.init();
-  }
-
-  @override
-  void dispose() {
-    _nombreCtrl.dispose();
-    _materiaCtrl.dispose();
-    super.dispose();
-  }
-
-  // ── Pickers ───────────────────────────────────────────────────────────────
-
-  Future<void> _pickDateRange() async {
-    final range = await showDateRangePicker(
-      context: context,
-      initialDateRange: _startDate != null && _endDate != null
-          ? DateTimeRange(start: _startDate!, end: _endDate!)
-          : null,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime(2100),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: const Color(0xFF8DC49A),
-              onPrimary: Colors.white,
-              surface: const Color(0xFFF4FBF5),
-              onSurface: const Color(0xFF3A4A3E),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (range == null || !mounted) return;
-
-    setState(() {
-      _startDate = DateTime(
-        range.start.year,
-        range.start.month,
-        range.start.day,
-      );
-      _endDate = DateTime(range.end.year, range.end.month, range.end.day);
-    });
-  }
-
-  // ── Guardar ───────────────────────────────────────────────────────────────
-
-  Future<void> _guardarTarea() async {
-    final workingDays = _workingDays;
-
-    if (_nombreCtrl.text.trim().isEmpty ||
-        _materiaCtrl.text.trim().isEmpty ||
-        _startDate == null ||
-        _endDate == null ||
-        workingDays.isEmpty) {
+  void _guardarTarea() {
+    if (_nombreCtrl.text.isEmpty ||
+        _materiaCtrl.text.isEmpty ||
+        _fechaEntrega == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Por favor completa todos los campos')),
       );
       return;
     }
 
-    final diasElegidos = [
-      for (int i = 0; i < _diasSemana.length; i++)
-        if (_diasSeleccionados[i]) _diasSemana[i],
-    ];
+    final diasElegidos = <String>[];
+    for (int i = 0; i < _diasSemana.length; i++) {
+      if (_diasSeleccionados[i]) diasElegidos.add(_diasSemana[i]);
+    }
 
-    final tarea = Tarea(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      nombre: _nombreCtrl.text.trim(),
-      materia: _materiaCtrl.text.trim(),
-      fechaEntrega: _endDate!,
+    final nuevaTarea = Tarea(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      nombre: _nombreCtrl.text,
+      materia: _materiaCtrl.text,
+      fechaEntrega: _fechaEntrega!,
       diasTrabajo: diasElegidos,
       tiempoSesion: _tiempoSesion,
       sesionesPorDia: _sesionesPorDia,
-      startDate: _startDate,
-      endDate: _endDate,
-      workingDays: workingDays,
     );
 
-    await TaskService.instance.addTarea(tarea);
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('¡Tarea creada exitosamente!'),
-        backgroundColor: Color(0xFF8DC49A),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    _resetForm();
+    debugPrint('Tarea creada: ${nuevaTarea.nombre}');
+    Navigator.pop(context, nuevaTarea);
   }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -128,13 +59,9 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFFF4FBF5),
         elevation: 0,
-        title: const Text(
-          'Nueva tarea',
-          style: TextStyle(
-            color: Color(0xFF3A4A3E),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        title: const Text('Nueva tarea',
+            style: TextStyle(
+                color: Color(0xFF3A4A3E), fontWeight: FontWeight.w500)),
         iconTheme: const IconThemeData(color: Color(0xFF3A4A3E)),
         actions: [
           IconButton(
@@ -156,6 +83,40 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             // ── Materia ───────────────────────────────────────────────────
             _label('Materia'),
             _campo(_materiaCtrl, 'Ej. Cálculo III'),
+            const SizedBox(height: 16),
+
+            _label('Fecha de entrega'),
+            GestureDetector(
+              onTap: () async {
+                final fecha = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime.now(),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime(2100),
+                );
+                if (fecha != null) setState(() => _fechaEntrega = fecha);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF4EB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: const Color(0xFFD6E8D8), width: 1.5),
+                ),
+                child: Text(
+                  _fechaEntrega == null
+                      ? 'Seleccionar fecha'
+                      : '${_fechaEntrega!.day}/${_fechaEntrega!.month}/${_fechaEntrega!.year}',
+                  style: TextStyle(
+                    color: _fechaEntrega == null
+                        ? const Color(0xFF7D9882)
+                        : const Color(0xFF3A4A3E),
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
 
             // ── Rango de fechas ───────────────────────────────────────────
@@ -202,6 +163,8 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
               children: List.generate(7, (i) {
                 final sel = _diasSeleccionados[i];
                 return GestureDetector(
+                  onTap: () => setState(
+                      () => _diasSeleccionados[i] = !seleccionado),
                   onTap: () => setState(() => _diasSeleccionados[i] = !sel),
                   child: Container(
                     width: 38,
@@ -308,6 +271,27 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
   );
 
   Widget _campo(TextEditingController ctrl, String hint) => TextField(
+        controller: ctrl,
+        style: const TextStyle(fontSize: 14, color: Color(0xFF3A4A3E)),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Color(0xFF7D9882)),
+          filled: true,
+          fillColor: const Color(0xFFEAF4EB),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide:
+                const BorderSide(color: Color(0xFFD6E8D8), width: 1.5),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide:
+                const BorderSide(color: Color(0xFFD6E8D8), width: 1.5),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide:
+                const BorderSide(color: Color(0xFF8DC49A), width: 1.5),
     controller: ctrl,
     style: const TextStyle(fontSize: 14, color: Color(0xFF3A4A3E)),
     decoration: InputDecoration(
