@@ -114,4 +114,45 @@ class DbService {
     );
     return Sqflite.firstIntValue(result) ?? 0;
   }
+  // Contar tareas vencidas
+Future<int> contarVencidas(String uid) async {
+  final database = await db;
+  final hoy = DateTime.now().toIso8601String();
+  final result = await database.rawQuery(
+    'SELECT COUNT(*) as total FROM tareas WHERE uid = ? AND completada = 0 AND fechaEntrega < ?',
+    [uid, hoy],
+  );
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+// Calcular racha de días consecutivos con tareas completadas
+Future<int> calcularRacha(String uid) async {
+  final database = await db;
+  final maps = await database.query(
+    'tareas',
+    where: 'uid = ? AND completada = 1',
+    whereArgs: [uid],
+    orderBy: 'fechaEntrega DESC',
+  );
+
+  if (maps.isEmpty) return 0;
+
+  final fechas = maps
+      .map((m) => DateTime.parse(m['fechaEntrega'] as String))
+      .map((d) => DateTime(d.year, d.month, d.day))
+      .toSet()
+      .toList()
+    ..sort((a, b) => b.compareTo(a));
+
+  int racha = 1;
+  for (int i = 0; i < fechas.length - 1; i++) {
+    final diff = fechas[i].difference(fechas[i + 1]).inDays;
+    if (diff == 1) {
+      racha++;
+    } else {
+      break;
+    }
+  }
+  return racha;
+ }
 }

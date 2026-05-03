@@ -4,9 +4,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
+import 'services/economy_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await EconomyService.init();
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

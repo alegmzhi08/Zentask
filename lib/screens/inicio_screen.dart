@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/tarea.dart';
 import '../services/db_service.dart';
+import '../services/economy_service.dart';
+import '../widgets/zencoins_badge.dart';
 
 class InicioScreen extends StatefulWidget {
   const InicioScreen({super.key});
@@ -29,6 +31,8 @@ class _InicioScreenState extends State<InicioScreen> {
   int _tareaIndex = 0;
   int _completadas = 0;
   int _pendientes = 0;
+  int _vencidas = 0;
+  int _racha = 0;
 
   final _db = DbService();
 
@@ -44,12 +48,20 @@ class _InicioScreenState extends State<InicioScreen> {
     final tareas = await _db.obtenerTareasPorFecha(uid, hoy);
     final completadas = await _db.contarCompletadas(uid);
     final pendientes = await _db.contarPendientes(uid);
+    final vencidas = await _db.contarVencidas(uid);
+    final racha = await _db.calcularRacha(uid);
+
     setState(() {
       _tareasHoy = tareas;
       _tareaActual = tareas.isNotEmpty ? tareas[0] : null;
       _tareaIndex = 0;
       _completadas = completadas;
       _pendientes = pendientes;
+      _vencidas = vencidas;
+      _racha = racha;
+      if (_tareaActual != null) {
+        _segundosRestantes = _tareaActual!.tiempoSesion * 60;
+      }
     });
   }
 
@@ -66,16 +78,38 @@ class _InicioScreenState extends State<InicioScreen> {
 
   Future<void> _completarTarea() async {
     if (_tareaActual == null) return;
-    await _db.completarTarea(_tareaActual!.id);
+    final tarea = _tareaActual!;
+    await _db.completarTarea(tarea.id);
+
+    // Recompensar con ZenCoins
+    final aTime = !DateTime.now().isAfter(tarea.fechaEntrega);
+    await EconomyService.instance.rewardTaskCompletion(
+      multiplier: aTime ? (_racha >= 3 ? 2 : 1) : 1,
+    );
+
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Tarea completada! 🎉'),
-          backgroundColor: Color(0xFF8DC49A),
+        SnackBar(
+          content: Text(aTime
+              ? '¡Tarea completada a tiempo! +${EconomyService.coinsPerTask} 🐟'
+              : '¡Tarea completada! +${EconomyService.coinsPerTask} 🐟'),
+          backgroundColor: const Color(0xFF8DC49A),
         ),
       );
     }
     await _cargarDatos();
+  }
+
+  Future<void> _claimDailyQuest() async {
+    final claimed = await EconomyService.instance.claimDailyQuestReward();
+    if (claimed && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡+75 ZenCoins reclamados! 🎉'),
+          backgroundColor: Color(0xFF8DC49A),
+        ),
+      );
+    }
   }
 
   int get _duracionTotal => _esTrabajo
@@ -113,6 +147,10 @@ class _InicioScreenState extends State<InicioScreen> {
       if (_esTrabajo) {
         _pomodorosEnCiclo = (_pomodorosEnCiclo + 1) % 4;
         _esTrabajo = false;
+        // Recompensar minutos de foco
+        EconomyService.instance.rewardFocusMinutes(
+          _tareaActual?.tiempoSesion ?? 25,
+        );
       } else {
         _esTrabajo = true;
       }
@@ -152,6 +190,8 @@ class _InicioScreenState extends State<InicioScreen> {
             style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: false,
         actions: [
+          const ZenCoinsBadge(),
+          const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _cargarDatos,
@@ -181,17 +221,19 @@ class _InicioScreenState extends State<InicioScreen> {
                           u?.email?.split('@')[0] ??
                           'Usuario',
                       style: const TextStyle(
-                          fontSize: 22, fontWeight: FontWeight.bold),
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold),
                     ),
                     Text(
                       u?.email ?? '',
-                      style: TextStyle(color: Colors.grey.shade600),
+                      style:
+                          TextStyle(color: Colors.grey.shade600),
                     ),
                   ],
                 );
               },
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
 
             // ── Tarea actual ──────────────────────────────────────────────
             if (_tareaActual != null) ...[
@@ -223,6 +265,17 @@ class _InicioScreenState extends State<InicioScreen> {
                         style: const TextStyle(
                             fontSize: 13,
                             color: Color(0xFF7D9882))),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Entrega: ${_tareaActual!.fechaEntrega.day}/${_tareaActual!.fechaEntrega.month}/${_tareaActual!.fechaEntrega.year}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: DateTime.now().isAfter(
+                                _tareaActual!.fechaEntrega)
+                            ? Colors.red.shade400
+                            : const Color(0xFF7D9882),
+                      ),
+                    ),
                     const SizedBox(height: 12),
 
                     // Selector de tarea si hay varias
@@ -235,7 +288,8 @@ class _InicioScreenState extends State<InicioScreen> {
                             child: Container(
                               width: 8,
                               height: 8,
-                              margin: const EdgeInsets.only(right: 6),
+                              margin:
+                                  const EdgeInsets.only(right: 6),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: i == _tareaIndex
@@ -253,15 +307,20 @@ class _InicioScreenState extends State<InicioScreen> {
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: _completarTarea,
-                        icon: const Icon(Icons.check_circle_outline,
+                        icon: const Icon(
+                            Icons.check_circle_outline,
                             color: Colors.white),
-                        label: const Text('Marcar como completada',
-                            style: TextStyle(color: Colors.white)),
+                        label: const Text(
+                            'Marcar como completada',
+                            style:
+                                TextStyle(color: Colors.white)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF8DC49A),
+                          backgroundColor:
+                              const Color(0xFF8DC49A),
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                              borderRadius:
+                                  BorderRadius.circular(12)),
                         ),
                       ),
                     ),
@@ -289,7 +348,8 @@ class _InicioScreenState extends State<InicioScreen> {
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF3A4A3E))),
                     Text('¡Crea una nueva tarea!',
-                        style: TextStyle(color: Color(0xFF7D9882))),
+                        style:
+                            TextStyle(color: Color(0xFF7D9882))),
                   ],
                 ),
               ),
@@ -298,7 +358,11 @@ class _InicioScreenState extends State<InicioScreen> {
 
             // ── Timer Pomodoro ────────────────────────────────────────────
             _buildTimerSection(),
-            const SizedBox(height: 28),
+            const SizedBox(height: 16),
+
+            // ── Daily Zen Quest ───────────────────────────────────────────
+            _buildDailyQuestSection(),
+            const SizedBox(height: 16),
 
             // ── Estadísticas ──────────────────────────────────────────────
             GridView.count(
@@ -313,16 +377,21 @@ class _InicioScreenState extends State<InicioScreen> {
                     'Sin completar', Colors.amber.shade700),
                 _buildStatCard('Completadas', '$_completadas',
                     'Total', Colors.green.shade600),
-                _buildStatCard('Vencidas', '0', 'Ultimos 7 días', Colors.green.shade600),
-                _buildStatCard('Tu Racha', '0', 'Racha Total', Colors.orange.shade600),
+                _buildStatCard('Vencidas', '$_vencidas',
+                    'Sin entregar', Colors.red.shade400),
+                _buildStatCard(
+                    'Racha', '🔥 $_racha', 'Días seguidos', Colors.orange.shade600),
               ],
             ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
+
   // ── Daily Zen Quest ───────────────────────────────────────────────────────
+
   Widget _buildDailyQuestSection() {
     return ValueListenableBuilder<DailyQuestState>(
       valueListenable: EconomyService.instance.dailyQuest,
@@ -336,7 +405,8 @@ class _InicioScreenState extends State<InicioScreen> {
                     EconomyService.dailyQuestFocusGoalMinutes)
                 .clamp(0.0, 1.0)
                 .toDouble();
-        final canClaim = quest.isReadyToClaim && !quest.rewardClaimed;
+        final canClaim =
+            quest.isReadyToClaim && !quest.rewardClaimed;
 
         return Container(
           width: double.infinity,
@@ -344,10 +414,12 @@ class _InicioScreenState extends State<InicioScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFD6E8D8), width: 1.4),
+            border: Border.all(
+                color: const Color(0xFFD6E8D8), width: 1.4),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF8DC49A).withValues(alpha: 0.08),
+                color: const Color(0xFF8DC49A)
+                    .withValues(alpha: 0.08),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -365,11 +437,8 @@ class _InicioScreenState extends State<InicioScreen> {
                       color: const Color(0xFFEAF4EB),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(
-                      Icons.spa_rounded,
-                      color: Color(0xFF8DC49A),
-                      size: 21,
-                    ),
+                    child: const Icon(Icons.spa_rounded,
+                        color: Color(0xFF8DC49A), size: 21),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
@@ -384,9 +453,7 @@ class _InicioScreenState extends State<InicioScreen> {
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
+                        horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFF4CC),
                       borderRadius: BorderRadius.circular(16),
@@ -435,15 +502,18 @@ class _InicioScreenState extends State<InicioScreen> {
                     quest.rewardClaimed
                         ? 'Reclamado por hoy'
                         : canClaim
-                        ? 'Reclamar +75'
-                        : 'Completa una meta',
+                            ? 'Reclamar +75'
+                            : 'Completa una meta',
                   ),
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF8DC49A),
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: const Color(0xFFEAF4EB),
-                    disabledForegroundColor: const Color(0xFF7D9882),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    disabledBackgroundColor:
+                        const Color(0xFFEAF4EB),
+                    disabledForegroundColor:
+                        const Color(0xFF7D9882),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12),
                   ),
                 ),
               ),
@@ -454,16 +524,68 @@ class _InicioScreenState extends State<InicioScreen> {
     );
   }
 
+  Widget _buildQuestProgressRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required double progress,
+    required Color color,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(label,
+                        style: const TextStyle(
+                          color: Color(0xFF3A4A3E),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        )),
+                  ),
+                  Text(value,
+                      style: const TextStyle(
+                        color: Color(0xFF7D9882),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      )),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 7,
+                  backgroundColor: const Color(0xFFEAF4EB),
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Timer ─────────────────────────────────────────────────────────────────
 
   Widget _buildTimerSection() {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      padding: const EdgeInsets.symmetric(
+          vertical: 24, horizontal: 20),
       decoration: BoxDecoration(
         color: const Color(0xFFEAF4EB),
         borderRadius: BorderRadius.circular(24),
-        border:
-            Border.all(color: const Color(0xFFD6E8D8), width: 1.5),
+        border: Border.all(
+            color: const Color(0xFFD6E8D8), width: 1.5),
       ),
       child: Column(
         children: [
@@ -500,8 +622,8 @@ class _InicioScreenState extends State<InicioScreen> {
                     value: _segundosRestantes / _duracionTotal,
                     strokeWidth: 9,
                     backgroundColor: const Color(0xFFD6E8D8),
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(_colorModo),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                        _colorModo),
                     strokeCap: StrokeCap.round,
                   ),
                 ),
@@ -511,7 +633,9 @@ class _InicioScreenState extends State<InicioScreen> {
                     fontSize: 38,
                     fontWeight: FontWeight.bold,
                     color: const Color(0xFF3A4A3E),
-                    fontFeatures: const [FontFeature.tabularFigures()],
+                    fontFeatures: const [
+                      FontFeature.tabularFigures()
+                    ],
                   ),
                 ),
               ],
@@ -538,7 +662,8 @@ class _InicioScreenState extends State<InicioScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: _colorModo.withValues(alpha: 0.35),
+                        color:
+                            _colorModo.withValues(alpha: 0.35),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -583,6 +708,8 @@ class _InicioScreenState extends State<InicioScreen> {
       ),
     );
   }
+
+  // ── Stat card ─────────────────────────────────────────────────────────────
 
   Widget _buildStatCard(
       String title, String count, String subtitle, Color color) {
