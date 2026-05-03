@@ -151,7 +151,7 @@ class _StreakCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
       valueListenable: StreakService.instance.streak,
-      builder: (_, racha, _) {
+      builder: (_, racha, __) {
         final x2Activo = racha >= StreakService.umbralMultiplicador;
         return _Card(
           child: Row(
@@ -336,7 +336,7 @@ class _StatsGrid extends StatelessWidget {
     // también agrega una transacción, por lo que este builder siempre está al día
     return ValueListenableBuilder<List<CoinTransaction>>(
       valueListenable: EconomyService.instance.transactions,
-      builder: (_, _, _) {
+      builder: (_, __, ___) {
         final s = EconomyService.instance.getStatsSnapshot();
         return GridView.count(
           crossAxisCount: 2,
@@ -386,7 +386,7 @@ class _TransactionHistory extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<List<CoinTransaction>>(
       valueListenable: EconomyService.instance.transactions,
-      builder: (_, txList, _) {
+      builder: (_, txList, __) {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -417,7 +417,7 @@ class _TransactionHistory extends StatelessWidget {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: txList.length,
-                separatorBuilder: (_, _) => const Divider(
+                separatorBuilder: (_, __) => const Divider(
                   height: 1,
                   indent: 56,
                   color: Color(0xFFEAF4EB),

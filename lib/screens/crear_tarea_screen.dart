@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/tarea.dart';
-import '../services/task_service.dart';
 
 class CrearTareaScreen extends StatefulWidget {
   const CrearTareaScreen({super.key});
@@ -15,6 +14,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
   final _nombreCtrl = TextEditingController();
   final _materiaCtrl = TextEditingController();
 
+  DateTime? _fechaEntrega;
   DateTime? _startDate;
   DateTime? _endDate;
   int _tiempoSesion = 25;
@@ -22,6 +22,23 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
 
   final List<String> _diasSemana = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'];
   final List<bool> _diasSeleccionados = List.filled(7, false);
+
+  Future<void> _pickDateRange() async {
+    final rango = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+      initialDateRange: _startDate != null && _endDate != null
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+    );
+    if (rango != null) {
+      setState(() {
+        _startDate = rango.start;
+        _endDate = rango.end;
+      });
+    }
+  }
 
   void _guardarTarea() {
     if (_nombreCtrl.text.isEmpty ||
@@ -163,8 +180,6 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
               children: List.generate(7, (i) {
                 final sel = _diasSeleccionados[i];
                 return GestureDetector(
-                  onTap: () => setState(
-                      () => _diasSeleccionados[i] = !seleccionado),
                   onTap: () => setState(() => _diasSeleccionados[i] = !sel),
                   child: Container(
                     width: 38,
@@ -292,27 +307,9 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             borderRadius: BorderRadius.circular(14),
             borderSide:
                 const BorderSide(color: Color(0xFF8DC49A), width: 1.5),
-    controller: ctrl,
-    style: const TextStyle(fontSize: 14, color: Color(0xFF3A4A3E)),
-    decoration: InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFF7D9882)),
-      filled: true,
-      fillColor: const Color(0xFFEAF4EB),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFD6E8D8), width: 1.5),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFD6E8D8), width: 1.5),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFF8DC49A), width: 1.5),
-      ),
-    ),
-  );
+          ),
+        ),
+      );
 }
 
 // ── Tile genérico para date/time pickers ─────────────────────────────────────

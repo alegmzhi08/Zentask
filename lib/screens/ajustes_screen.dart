@@ -194,12 +194,14 @@ class _AjustesScreenState extends State<AjustesScreen> {
     }
   } on FirebaseAuthException catch (e) {
     if (e.code == 'requires-recent-login') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por seguridad debes iniciar sesión de nuevo antes de eliminar tu cuenta'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Por seguridad debes iniciar sesión de nuevo antes de eliminar tu cuenta'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       await FirebaseAuth.instance.signOut();
     }
   }
@@ -263,6 +265,104 @@ class _AjustesScreenState extends State<AjustesScreen> {
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: Text(etiquetaBoton),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PomodoroConfigSheet extends StatefulWidget {
+  const _PomodoroConfigSheet();
+
+  @override
+  State<_PomodoroConfigSheet> createState() => _PomodoroConfigSheetState();
+}
+
+class _PomodoroConfigSheetState extends State<_PomodoroConfigSheet> {
+  late int _work;
+  late int _brk;
+
+  @override
+  void initState() {
+    super.initState();
+    _work = SettingsService.instance.pomodoroDuration.value;
+    _brk = SettingsService.instance.breakDuration.value;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD6E8D8),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Configurar Pomodoro',
+            style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF3A4A3E)),
+          ),
+          const SizedBox(height: 24),
+          Text('Trabajo: $_work min',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF7D9882))),
+          Slider(
+            value: _work.toDouble(),
+            min: SettingsService.minPomodoroDuration.toDouble(),
+            max: SettingsService.maxPomodoroDuration.toDouble(),
+            divisions: (SettingsService.maxPomodoroDuration -
+                    SettingsService.minPomodoroDuration),
+            activeColor: const Color(0xFF8DC49A),
+            label: '$_work min',
+            onChanged: (v) => setState(() => _work = v.round()),
+          ),
+          const SizedBox(height: 8),
+          Text('Descanso: $_brk min',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF7D9882))),
+          Slider(
+            value: _brk.toDouble(),
+            min: SettingsService.minBreakDuration.toDouble(),
+            max: SettingsService.maxBreakDuration.toDouble(),
+            divisions: (SettingsService.maxBreakDuration -
+                    SettingsService.minBreakDuration),
+            activeColor: const Color(0xFF8DC49A),
+            label: '$_brk min',
+            onChanged: (v) => setState(() => _brk = v.round()),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                await SettingsService.instance.setPomodoroDuration(_work);
+                await SettingsService.instance.setBreakDuration(_brk);
+                if (context.mounted) Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8DC49A),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: const Text('Guardar',
+                  style: TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700)),
+            ),
           ),
         ],
       ),
