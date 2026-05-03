@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
+import 'services/economy_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
 
@@ -24,9 +25,7 @@ class ZentaskApp extends StatelessWidget {
       title: 'Zentask',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF8DC49A),
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF8DC49A)),
         useMaterial3: true,
       ),
       home: const PantallaInicial(),
