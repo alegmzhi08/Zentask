@@ -1,8 +1,9 @@
 // lib/screens/calendario.dart
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/tarea.dart';
-import '../services/task_service.dart';
+import '../services/db_service.dart';
 
 enum CalendarView { mes, semana, dia }
 
@@ -14,30 +15,44 @@ class CalendarioScreen extends StatefulWidget {
 }
 
 class _CalendarioScreenState extends State<CalendarioScreen> {
-  late final ValueNotifier<DateTime> _selectedDay;
+  DateTime _selectedDay = DateTime.now();
   DateTime _focusedDay = DateTime.now();
   CalendarView _currentView = CalendarView.mes;
+  List<Tarea> _tareasDelDia = [];
+  final _db = DbService();
 
   CalendarFormat get _tableCalendarFormat => switch (_currentView) {
-    CalendarView.semana => CalendarFormat.week,
-    _ => CalendarFormat.month,
-  };
+        CalendarView.semana => CalendarFormat.week,
+        _ => CalendarFormat.month,
+      };
 
   @override
   void initState() {
     super.initState();
-    final today = DateTime.now();
-    _selectedDay = ValueNotifier(DateTime(today.year, today.month, today.day));
-    TaskService.instance.init();
+    _cargarTareas(DateTime.now());
   }
 
-  @override
-  void dispose() {
-    _selectedDay.dispose();
-    super.dispose();
+  Future<void> _cargarTareas(DateTime fecha) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final tareas = await _db.obtenerTareasPorFecha(uid, fecha);
+    setState(() {
+      _selectedDay = fecha;
+      _tareasDelDia = tareas;
+    });
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  Future<void> _completarTarea(Tarea tarea) async {
+    await _db.completarTarea(tarea.id);
+    await _cargarTareas(_selectedDay);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Tarea completada! 🎉'),
+          backgroundColor: Color(0xFF8DC49A),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,78 +69,105 @@ class _CalendarioScreenState extends State<CalendarioScreen> {
           ),
         ),
         iconTheme: const IconThemeData(color: Color(0xFF3A4A3E)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFF7D9882)),
+            onPressed: () => _cargarTareas(_selectedDay),
+          ),
+        ],
       ),
       body: Column(
         children: [
           _buildViewSelector(),
           if (_currentView == CalendarView.dia)
-            Expanded(
-              child: ValueListenableBuilder<DateTime>(
-                valueListenable: _selectedDay,
-                builder: (context, selected, _) {
-                  return ValueListenableBuilder<List<Tarea>>(
-                    valueListenable: TaskService.instance.tareas,
-                    builder: (context, tareas, _) {
-                      final tasks = TaskService.instance.getTasksForDate(
-                        selected,
-                      );
-                      return _buildDailyTimeline(tasks, selected);
-                    },
-                  );
-                },
-              ),
-            )
+            Expanded(child: _buildDailyTimeline(_tareasDelDia))
           else ...[
-            // ── Calendario ─────────────────────────────────────────────────
-            // Outer builder: se reconstruye cuando la lista de tareas cambia
-            // (actualiza puntos de eventos en el grid).
-            ValueListenableBuilder<List<Tarea>>(
-              valueListenable: TaskService.instance.tareas,
-              builder: (context, tareas, child) {
-                // Inner builder: se reconstruye cuando cambia el día seleccionado
-                // (actualiza el resaltado sin depender de setState).
-                return ValueListenableBuilder<DateTime>(
-                  valueListenable: _selectedDay,
-                  builder: (context, selected, _) {
-                    return _CalendarioWidget(
-                      selectedDay: selected,
-                      focusedDay: _focusedDay,
-                      calendarFormat: _tableCalendarFormat,
-                      onDaySelected: (sel, foc) {
-                        _selectedDay.value = DateTime(
-                          sel.year,
-                          sel.month,
-                          sel.day,
-                        );
-                        setState(() => _focusedDay = foc);
-                      },
-                      onPageChanged: (foc) => setState(() => _focusedDay = foc),
-                      onFormatChanged: _handleCalendarFormatChanged,
-                    );
-                  },
-                );
+            // ── Calendario ────────────────────────────────────────────────
+            TableCalendar(
+              firstDay: DateTime(2020),
+              lastDay: DateTime(2100),
+              focusedDay: _focusedDay,
+              selectedDayPredicate: (day) =>
+                  isSameDay(day, _selectedDay),
+              calendarFormat: _tableCalendarFormat,
+              onDaySelected: (selected, focused) {
+                setState(() => _focusedDay = focused);
+                _cargarTareas(selected);
               },
+              onPageChanged: (focused) =>
+                  setState(() => _focusedDay = focused),
+              onFormatChanged: _handleCalendarFormatChanged,
+              availableCalendarFormats: const {
+                CalendarFormat.month: 'Mes',
+                CalendarFormat.week: 'Semana',
+              },
+              calendarStyle: const CalendarStyle(
+                todayDecoration: BoxDecoration(
+                  color: Color(0xFF8DC49A),
+                  shape: BoxShape.circle,
+                ),
+                todayTextStyle: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+                selectedDecoration: BoxDecoration(
+                  color: Color(0xFF5A9267),
+                  shape: BoxShape.circle,
+                ),
+                selectedTextStyle: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+                markerDecoration: BoxDecoration(
+                  color: Color(0xFFFF8F00),
+                  shape: BoxShape.circle,
+                ),
+                markerSize: 5.0,
+                markersMaxCount: 3,
+                weekendTextStyle: TextStyle(color: Color(0xFFFF8F00)),
+                outsideDaysVisible: false,
+                defaultTextStyle:
+                    TextStyle(color: Color(0xFF3A4A3E)),
+              ),
+              daysOfWeekStyle: const DaysOfWeekStyle(
+                weekdayStyle: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF7D9882),
+                ),
+                weekendStyle: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFFF8F00),
+                ),
+              ),
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+                titleTextStyle: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF3A4A3E),
+                ),
+                leftChevronIcon: Icon(
+                  Icons.chevron_left,
+                  color: Color(0xFF7D9882),
+                  size: 22,
+                ),
+                rightChevronIcon: Icon(
+                  Icons.chevron_right,
+                  color: Color(0xFF7D9882),
+                  size: 22,
+                ),
+                headerPadding:
+                    EdgeInsets.symmetric(vertical: 10),
+              ),
             ),
 
             const Divider(height: 1, color: Color(0xFFD6E8D8)),
 
-            // ── Lista de tareas del día seleccionado ───────────────────────
-            Expanded(
-              child: ValueListenableBuilder<DateTime>(
-                valueListenable: _selectedDay,
-                builder: (context, selected, _) {
-                  return ValueListenableBuilder<List<Tarea>>(
-                    valueListenable: TaskService.instance.tareas,
-                    builder: (context, tareas, _) {
-                      final tasks = TaskService.instance.getTasksForDate(
-                        selected,
-                      );
-                      return _buildTaskList(tasks, selected);
-                    },
-                  );
-                },
-              ),
-            ),
+            // ── Lista de tareas del día ────────────────────────────────
+            Expanded(child: _buildTaskList(_tareasDelDia)),
           ],
         ],
       ),
@@ -194,15 +236,53 @@ class _CalendarioScreenState extends State<CalendarioScreen> {
     );
   }
 
-  Widget _buildDailyTimeline(List<Tarea> tasks, DateTime day) {
+  Widget _buildTaskList(List<Tarea> tasks) {
+    if (tasks.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('🌿', style: TextStyle(fontSize: 36)),
+            SizedBox(height: 12),
+            Text(
+              'Sin tareas para este día',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF3A4A3E),
+              ),
+            ),
+            Text(
+              'Selecciona otro día o crea una tarea',
+              style:
+                  TextStyle(color: Color(0xFF7D9882), fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: tasks.length,
+      itemBuilder: (context, index) {
+        final tarea = tasks[index];
+        return _CalTaskTile(
+          tarea: tarea,
+          completada: tarea.completada,
+          onComplete: () => _completarTarea(tarea),
+        );
+      },
+    );
+  }
+
+  Widget _buildDailyTimeline(List<Tarea> tasks) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 4, 16, 24),
       itemCount: 24,
       itemBuilder: (context, hour) {
-        final tasksForHour = tasks
-            .where((tarea) => _belongsToTimelineHour(tarea, day, hour))
-            .toList();
-
+        final tasksForHour =
+            tasks.where((t) => hour >= 8 && hour < 20).toList();
         return SizedBox(
           height: 60,
           child: Row(
@@ -226,26 +306,37 @@ class _CalendarioScreenState extends State<CalendarioScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Divider(height: 1, color: Color(0xFFD6E8D8)),
+                    const Divider(
+                        height: 1, color: Color(0xFFD6E8D8)),
                     if (tasksForHour.isNotEmpty)
                       Expanded(
-                        child: ListView.separated(
+                        child: ListView.builder(
                           scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
                           itemCount: tasksForHour.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(width: 8),
-                          itemBuilder: (context, index) {
-                            final tarea = tasksForHour[index];
-                            return _TimelineTaskChip(
-                              tarea: tarea,
-                              completada: tarea.isCompletedOn(day),
+                          itemBuilder: (context, i) {
+                            final t = tasksForHour[i];
+                            return Container(
+                              margin: const EdgeInsets.only(
+                                  right: 8, top: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF8DC49A),
+                                borderRadius:
+                                    BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                t.nombre,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             );
                           },
                         ),
-                      )
-                    else
-                      const Spacer(),
+                      ),
                   ],
                 ),
               ),
@@ -255,225 +346,9 @@ class _CalendarioScreenState extends State<CalendarioScreen> {
       },
     );
   }
-
-  bool _belongsToTimelineHour(Tarea tarea, DateTime day, int hour) {
-    final scheduled = tarea.scheduledDate;
-    final hasSpecificHour =
-        scheduled != null &&
-        isSameDay(scheduled, day) &&
-        (scheduled.hour != 0 || scheduled.minute != 0);
-
-    if (hasSpecificHour) return scheduled.hour == hour;
-    return hour == 0;
-  }
-
-  // ── Lista de tareas ───────────────────────────────────────────────────────
-
-  Widget _buildTaskList(List<Tarea> tasks, DateTime day) {
-    if (tasks.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.check_circle_outline,
-              color: Color(0xFF8DC49A),
-              size: 40,
-            ),
-            SizedBox(height: 10),
-            Text(
-              'Sin tareas para este día',
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFF7D9882),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-      itemCount: tasks.length,
-      itemBuilder: (context, i) {
-        final tarea = tasks[i];
-        final completada = tarea.isCompletedOn(day);
-        return _CalTaskTile(
-          tarea: tarea,
-          completada: completada,
-          // Completar en la vista de calendario agrega la fecha a completedDates
-          // sin romper la recurrencia de días futuros.
-          onComplete: completada
-              ? null
-              : () => TaskService.instance.completarEnFecha(tarea.id, day),
-        );
-      },
-    );
-  }
 }
 
-class _TimelineTaskChip extends StatelessWidget {
-  const _TimelineTaskChip({required this.tarea, required this.completada});
-
-  final Tarea tarea;
-  final bool completada;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 180),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: completada ? const Color(0xFFEAF4EB) : Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: completada ? const Color(0xFF8DC49A) : const Color(0xFFD6E8D8),
-          width: 1.2,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            completada ? Icons.check_circle_rounded : Icons.circle_outlined,
-            size: 14,
-            color: completada
-                ? const Color(0xFF8DC49A)
-                : const Color(0xFF7D9882),
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              tarea.nombre,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: completada
-                    ? const Color(0xFF7D9882)
-                    : const Color(0xFF3A4A3E),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                decoration: completada
-                    ? TextDecoration.lineThrough
-                    : TextDecoration.none,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Widget del TableCalendar ──────────────────────────────────────────────────
-
-class _CalendarioWidget extends StatelessWidget {
-  const _CalendarioWidget({
-    required this.selectedDay,
-    required this.focusedDay,
-    required this.calendarFormat,
-    required this.onDaySelected,
-    required this.onPageChanged,
-    required this.onFormatChanged,
-  });
-
-  final DateTime selectedDay;
-  final DateTime focusedDay;
-  final CalendarFormat calendarFormat;
-  final void Function(DateTime selected, DateTime focused) onDaySelected;
-  final ValueChanged<DateTime> onPageChanged;
-  final ValueChanged<CalendarFormat> onFormatChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return TableCalendar<Tarea>(
-      firstDay: DateTime(2020),
-      lastDay: DateTime(2100),
-      focusedDay: focusedDay,
-      selectedDayPredicate: (day) => isSameDay(day, selectedDay),
-      calendarFormat: calendarFormat,
-      startingDayOfWeek: StartingDayOfWeek.monday,
-      availableGestures: AvailableGestures.all,
-      eventLoader: TaskService.instance.getTasksForDate,
-      onDaySelected: onDaySelected,
-      onPageChanged: onPageChanged,
-      onFormatChanged: onFormatChanged,
-      availableCalendarFormats: const {
-        CalendarFormat.month: 'Mes',
-        CalendarFormat.week: 'Semana',
-      },
-      calendarStyle: const CalendarStyle(
-        // Hoy
-        todayDecoration: BoxDecoration(
-          color: Color(0xFF8DC49A),
-          shape: BoxShape.circle,
-        ),
-        todayTextStyle: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-        ),
-        // Día seleccionado
-        selectedDecoration: BoxDecoration(
-          color: Color(0xFF5A9267),
-          shape: BoxShape.circle,
-        ),
-        selectedTextStyle: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-        ),
-        // Puntos de eventos
-        markerDecoration: BoxDecoration(
-          color: Color(0xFFFF8F00),
-          shape: BoxShape.circle,
-        ),
-        markerSize: 5.0,
-        markersMaxCount: 3,
-        markerMargin: EdgeInsets.symmetric(horizontal: 1),
-        // Fin de semana en naranja suave
-        weekendTextStyle: TextStyle(color: Color(0xFFFF8F00)),
-        // Días fuera del mes ocultos
-        outsideDaysVisible: false,
-        // Días normales
-        defaultTextStyle: TextStyle(color: Color(0xFF3A4A3E)),
-      ),
-      daysOfWeekStyle: const DaysOfWeekStyle(
-        weekdayStyle: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF7D9882),
-        ),
-        weekendStyle: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFFFF8F00),
-        ),
-      ),
-      headerStyle: const HeaderStyle(
-        formatButtonVisible: false,
-        titleCentered: true,
-        titleTextStyle: TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF3A4A3E),
-        ),
-        leftChevronIcon: Icon(
-          Icons.chevron_left,
-          color: Color(0xFF7D9882),
-          size: 22,
-        ),
-        rightChevronIcon: Icon(
-          Icons.chevron_right,
-          color: Color(0xFF7D9882),
-          size: 22,
-        ),
-        headerPadding: EdgeInsets.symmetric(vertical: 10),
-      ),
-    );
-  }
-}
-
-// ── Tile de tarea en la vista calendario ──────────────────────────────────────
+// ── Tile de tarea ─────────────────────────────────────────────────────────────
 
 class _CalTaskTile extends StatelessWidget {
   const _CalTaskTile({
@@ -486,30 +361,27 @@ class _CalTaskTile extends StatelessWidget {
   final bool completada;
   final VoidCallback? onComplete;
 
-  String? get _hora {
-    final dt = tarea.scheduledDate;
-    if (dt == null || (dt.hour == 0 && dt.minute == 0)) return null;
-    return '${dt.hour.toString().padLeft(2, '0')}:'
-        '${dt.minute.toString().padLeft(2, '0')}';
-  }
-
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       decoration: BoxDecoration(
-        color: completada ? const Color(0xFFEAF4EB) : Colors.white,
+        color:
+            completada ? const Color(0xFFEAF4EB) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: completada ? const Color(0xFF8DC49A) : const Color(0xFFE8E8E8),
+          color: completada
+              ? const Color(0xFF8DC49A)
+              : const Color(0xFFE8E8E8),
           width: 1.5,
         ),
       ),
       child: Row(
         children: [
-          // Checkbox circular animado
+          // Checkbox circular
           GestureDetector(
             onTap: onComplete,
             child: AnimatedContainer(
@@ -529,17 +401,14 @@ class _CalTaskTile extends StatelessWidget {
                 ),
               ),
               child: completada
-                  ? const Icon(
-                      Icons.check_rounded,
-                      size: 16,
-                      color: Colors.white,
-                    )
+                  ? const Icon(Icons.check_rounded,
+                      size: 16, color: Colors.white)
                   : null,
             ),
           ),
           const SizedBox(width: 12),
 
-          // Nombre, materia y badge de recurrencia
+          // Nombre y materia
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -560,72 +429,35 @@ class _CalTaskTile extends StatelessWidget {
                   child: Text(tarea.nombre),
                 ),
                 const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Text(
-                      tarea.materia,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF7D9882),
-                      ),
-                    ),
-                    if (tarea.recurrence != 'none') ...[
-                      const SizedBox(width: 6),
-                      _RecurrenceBadge(recurrence: tarea.recurrence),
-                    ],
-                  ],
+                Text(
+                  tarea.materia,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF7D9882),
+                  ),
                 ),
               ],
             ),
           ),
 
-          // Hora (si fue asignada y no es medianoche)
-          if (_hora != null) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEAF4EB),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _hora!,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF5A9267),
-                ),
+          // Duración
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF4EB),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${tarea.tiempoSesion} min',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF5A9267),
               ),
             ),
-          ],
+          ),
         ],
-      ),
-    );
-  }
-}
-
-// ── Badge de recurrencia ─────────────────────────────────────────────────────
-
-class _RecurrenceBadge extends StatelessWidget {
-  const _RecurrenceBadge({required this.recurrence});
-  final String recurrence;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEAF4EB),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFD6E8D8)),
-      ),
-      child: Text(
-        recurrence == 'daily' ? '🔁 Diario' : '📅 Semanal',
-        style: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF7D9882),
-        ),
       ),
     );
   }
