@@ -20,7 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
   bool _verContrasena = false;
 
-  void _submit() async {
+    void _submit() async {
     setState(() { _cargando = true; _error = null; });
 
     String? error;
@@ -36,6 +36,10 @@ class _LoginScreenState extends State<LoginScreen> {
         _contrasenaCtrl.text.trim(),
       );
     }
+
+    // --- ESCUDO PROTECTOR ---
+    // Si la pantalla ya se cerró mientras esperábamos a Firebase, abortamos aquí.
+    if (!mounted) return; 
 
     setState(() { _cargando = false; });
 
@@ -62,25 +66,25 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
 
               // Logo
-              Center(
+              const Center(
                 child: Column(
                   children: [
-                    const SizedBox(height: 32),
+                    SizedBox(height: 32),
                     Text('Zentask',
                         style: TextStyle(
                           fontSize: 42,
                           fontWeight: FontWeight.w300,
-                          color: const Color(0xFF3A4A3E),
+                          color: Color(0xFF3A4A3E),
                           fontStyle: FontStyle.italic,
                         )),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text('flujo sin esfuerzo',
                         style: TextStyle(
                           fontSize: 12,
-                          color: const Color(0xFF7D9882),
+                          color: Color(0xFF7D9882),
                           letterSpacing: 2,
                         )),
-                    const SizedBox(height: 48),
+                    SizedBox(height: 48),
                   ],
                 ),
               ),
