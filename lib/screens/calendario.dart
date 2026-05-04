@@ -44,7 +44,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> {
   Future<void> _completarTarea(Tarea tarea) async {
     await _db.completarTarea(tarea.id);
     await _cargarTareas(_selectedDay);
-    if (context.mounted) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('¡Tarea completada! 🎉'),

@@ -74,7 +74,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
   // Guarda en SQLite
   await DbService().insertarTarea(nuevaTarea);
 
-  if (context.mounted) {
+  if (mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('¡Tarea creada exitosamente! ✓')),
     );

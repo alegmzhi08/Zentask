@@ -12,10 +12,10 @@ class AjustesScreen extends StatefulWidget {
 }
 
 class _AjustesScreenState extends State<AjustesScreen> {
-  bool _modoOscuro = false;
-  bool _modoEstricto = false;
-  bool _recordatorios = true;
-  bool _notificacionesRacha = true;
+  final bool _modoOscuro = false;
+  final bool _modoEstricto = false;
+  final bool _recordatorios = true;
+  final bool _notificacionesRacha = true;
 
   @override
   void initState() {

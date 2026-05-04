@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/tarea.dart';
@@ -118,7 +117,7 @@ class _InicioScreenState extends State<InicioScreen> {
       multiplier: aTime ? (_racha >= 3 ? 2 : 1) : 1,
     );
 
-    if (context.mounted) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(aTime
@@ -133,7 +132,7 @@ class _InicioScreenState extends State<InicioScreen> {
 
   Future<void> _claimDailyQuest() async {
     final claimed = await EconomyService.instance.claimDailyQuestReward();
-    if (claimed && context.mounted) {
+    if (claimed && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('¡+75 ZenCoins reclamados! 🎉'),
@@ -697,11 +696,11 @@ class _InicioScreenState extends State<InicioScreen> {
                 ),
                 Text(
                   _tiempoFormateado,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 38,
                     fontWeight: FontWeight.bold,
-                    color: const Color(0xFF3A4A3E),
-                    fontFeatures: const [
+                    color: Color(0xFF3A4A3E),
+                    fontFeatures: [
                       FontFeature.tabularFigures()
                     ],
                   ),
