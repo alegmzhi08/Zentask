@@ -12,12 +12,12 @@ class ZenGardenPainter extends CustomPainter {
 
   final int tier;
 
-  // ── Paleta pastel "estanque zen diurno" ──────────────────────────────────
-  static const Color _gradTop    = Color(0xFFC8E6F5); // azul cielo suave
-  static const Color _gradBottom = Color(0xFFADD4EC); // azul estanque sereno
-  static const Color _rake       = Color(0x50638FAA); // rastrillo visible en claro
-  static const Color _rock       = Color(0xFF7B9CAF); // piedra azul-gris suave
-  static const Color _rockEdge   = Color(0xFF5A7B8E); // borde piedra
+  // ── Paleta "jardín zen verde ZenTask" ────────────────────────────────────
+  static const Color _gradTop    = Color(0xFFD0E8C8); // verde sage claro
+  static const Color _gradBottom = Color(0xFFB5D4AE); // verde menta suave
+  static const Color _rake       = Color(0x5063856A); // rastrillo verde-gris
+  static const Color _rock       = Color(0xFF7B9C7F); // piedra verde-gris
+  static const Color _rockEdge   = Color(0xFF5A7B5E); // borde piedra verde
 
   // ── Métricas del rastrillado ─────────────────────────────────────────────
   static const double _lineGap   = 18.0;

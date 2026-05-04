@@ -22,12 +22,12 @@ const _kBicato   = 'assets/bicato.png';
 /// Jardín interactivo donde los gatos se mueven de forma autónoma.
 ///
 /// Z-index del Stack (de atrás hacia adelante):
-///   0 – Fondo procedural [ZenGardenPainter] (gradiente pastel)
+///   0   – Fondo procedural [ZenGardenPainter] (gradiente verde ZenTask)
 ///   0.5 – Marca de agua Bicato (opacidad 0.04)
-///   1 – Estanques + rocas   (tier 1+, ordenados por top asc = profundidad)
-///   2 – Vegetación + 3 linternas (tier 2+, ordenados por top asc = profundidad)
-///   3 – Gatos animados
-///   4 – Sakura (tier 3, dosel superior)
+///   1   – Estanques + rocas   (tier 1+, ordenados por top asc = profundidad)
+///   2   – Vegetación + 3 linternas (tier 2+, ordenados por top asc = profundidad)
+///   2.5 – Sakura (tier 3): top-izq + bottom-der — siempre BAJO los gatos
+///   3   – Gatos animados (SIEMPRE encima de todo)
 class CatGardenWidget extends StatelessWidget {
   const CatGardenWidget({super.key, required this.provider});
 
@@ -128,7 +128,29 @@ class CatGardenWidget extends StatelessWidget {
                   ],
                 ),
 
-                // ── Capa 3: Gatos interactivos ───────────────────────────────
+                // ── Capa 2.5: Sakura (tier 3) ───────────────────────────────
+                // Posición simétrica diagonal: top-izq ↔ bottom-der.
+                // Sakura sale de top-der para no tapar pond_2 (también top-der).
+                // Gatos se renderizan en capa 3, SIEMPRE por encima.
+                _decorLayer(
+                  visible: tier >= 3,
+                  children: [
+                    // sakura: esquina superior-izquierda (libre de estanques)
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      child: _img(_kSakura, 175),
+                    ),
+                    // sakura_2: esquina inferior-derecha (simétrica diagonal)
+                    Positioned(
+                      right: 0,
+                      bottom: h * 0.05,
+                      child: _img(_kSakura2, 130),
+                    ),
+                  ],
+                ),
+
+                // ── Capa 3: Gatos interactivos (siempre encima) ─────────────
                 for (final cat in provider.cats)
                   Positioned(
                     key: ValueKey(cat.id),
@@ -141,25 +163,6 @@ class CatGardenWidget extends StatelessWidget {
                       provider: provider,
                     ),
                   ),
-
-                // ── Capa 4: Sakura (tier 3, dosel superior) ─────────────────
-                // sakura cubre esquina superior-derecha (sobre pond_2).
-                // sakura_2 como contrapunto en esquina superior-izquierda.
-                _decorLayer(
-                  visible: tier >= 3,
-                  children: [
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: _img(_kSakura, 175),
-                    ),
-                    Positioned(
-                      left: 0,
-                      top: h * 0.06,
-                      child: _img(_kSakura2, 130),
-                    ),
-                  ],
-                ),
 
               ],
             );
