@@ -150,7 +150,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             const SizedBox(height: 16),
 
             // ── Rango de fechas ───────────────────────────────────────────
-            _label('Rango de fechas'),
+            _label('Fechas a trabajar'),
             _DateTile(
               icon: Icons.date_range_outlined,
               label: _dateRangeLabel,
