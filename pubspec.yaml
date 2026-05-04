@@ -28,6 +28,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/bicato.png
     - assets/images/game/cats/spotted/
     - assets/images/game/cats/bw/
     - assets/images/game/garden/

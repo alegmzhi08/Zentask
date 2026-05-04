@@ -56,7 +56,7 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.pets_outlined),
             activeIcon: Icon(Icons.pets),
-            label: 'Gaticos',
+            label: 'Gatos',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings_outlined),
