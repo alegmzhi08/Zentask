@@ -20,7 +20,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
   @override
   void initState() {
     super.initState();
-    SettingsService.instance.init();
+    SettingsService.init();
   }
 
   @override

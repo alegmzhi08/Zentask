@@ -2,37 +2,43 @@ import 'package:flutter/material.dart';
 
 /// Pinta el fondo del jardín zen de forma procedural según el [tier].
 ///
-/// Tier 1 (0-3 gatos): arena lisa.
-/// Tier 2 (4-7 gatos): arena con líneas horizontales suaves (rastrillado simple).
-/// Tier 3 (8+ gatos):  rastrillado con ondas circulares alrededor de dos piedras.
+/// Tier 1: gradiente oscuro limpio, sin líneas.
+/// Tier 2: gradiente + líneas de rastrillo muy sutiles.
+/// Tier 3: rastrillo con ondas circulares alrededor de dos piedras.
 ///
-/// [shouldRepaint] devuelve `false` mientras el tier no cambie, de modo que
-/// los ~60 ticks/s del movimiento de gatos no disparan redibujado del fondo.
+/// [shouldRepaint] devuelve `false` mientras el tier no cambie.
 class ZenGardenPainter extends CustomPainter {
   const ZenGardenPainter({required this.tier});
 
   final int tier;
 
-  // ── Paleta ───────────────────────────────────────────────────────────────
-  static const Color _sand  = Color(0xFFF5EDDA);
-  static const Color _rake  = Color(0xFFCCBFA0);
-  static const Color _rock  = Color(0xFFAA9878);
-  static const Color _rockEdge = Color(0xFF8E7E62);
+  // ── Paleta oscura "medianoche zen" ───────────────────────────────────────
+  static const Color _gradTop    = Color(0xFF080E1C); // azul-negro profundo
+  static const Color _gradBottom = Color(0xFF131F33); // azul marino oscuro
+  static const Color _rake       = Color(0x1E4A7899); // líneas muy sutiles
+  static const Color _rock       = Color(0xFF4E6070); // piedra fría
+  static const Color _rockEdge   = Color(0xFF364855); // borde piedra
 
-  // ── Métricas del rastrillado ──────────────────────────────────────────────
-  static const double _lineGap    = 18.0; // separación entre líneas
-  static const double _amplitude  =  2.2; // altura de la onda (px)
-  static const double _waveLen    = 60.0; // longitud de onda (px)
-  static const double _strokeW    =  1.1;
-
-  // ── Piedras (posición relativa, fija) ────────────────────────────────────
-  static const double _rockR      = 10.0;
-  static const int    _ripples    =  5;
+  // ── Métricas del rastrillado ─────────────────────────────────────────────
+  static const double _lineGap   = 18.0;
+  static const double _amplitude =  2.2;
+  static const double _waveLen   = 60.0;
+  static const double _strokeW   =  1.1;
+  static const double _rockR     = 10.0;
+  static const int    _ripples   =  5;
 
   @override
   void paint(Canvas canvas, Size size) {
-    // ── Fondo de arena ──────────────────────────────────────────────────────
-    canvas.drawRect(Offset.zero & size, Paint()..color = _sand);
+    // ── Fondo: gradiente vertical ───────────────────────────────────────────
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [_gradTop, _gradBottom],
+        ).createShader(Offset.zero & size),
+    );
 
     if (tier < 2) return;
 
@@ -47,7 +53,6 @@ class ZenGardenPainter extends CustomPainter {
       return;
     }
 
-    // ── Tier 3: líneas evitando zonas de piedras ─────────────────────────────
     _drawTier3(canvas, size, rake);
   }
 
@@ -59,8 +64,6 @@ class ZenGardenPainter extends CustomPainter {
     }
   }
 
-  /// Genera una curva bezier cuadrática que simula una línea de rastrillo.
-  /// [xOffset] desplaza la fase horizontal (para las líneas fuera del clip).
   Path _wavePath(double baseY, double xStart, double xEnd) {
     final path = Path()..moveTo(xStart, baseY);
     double x = xStart;
@@ -85,8 +88,6 @@ class ZenGardenPainter extends CustomPainter {
     final rocks = _rockCenters(size);
     const rippleR = _rockR + _ripples * _lineGap;
 
-    // Clip: recorte que excluye las zonas de ripple alrededor de cada piedra.
-    // PathFillType.evenOdd: rect(odd) - círculos(even) = visible fuera de los círculos.
     final clip = Path()..addRect(Offset.zero & size);
     for (final c in rocks) {
       clip.addOval(Rect.fromCircle(center: c, radius: rippleR + 2));
@@ -98,20 +99,17 @@ class ZenGardenPainter extends CustomPainter {
     _drawLines(canvas, size, paint);
     canvas.restore();
 
-    // Ripples concéntricos
     for (final c in rocks) {
       for (int i = 1; i <= _ripples; i++) {
         canvas.drawCircle(c, _rockR + i * _lineGap, paint);
       }
-      // Sombra sutil (círculo desplazado)
       canvas.drawCircle(
         c.translate(1.5, 2),
         _rockR,
         Paint()
-          ..color = const Color(0x40000000)
+          ..color = const Color(0x50000000)
           ..style = PaintingStyle.fill,
       );
-      // Piedra
       canvas.drawCircle(c, _rockR, Paint()
         ..color = _rock
         ..style = PaintingStyle.fill);
@@ -119,13 +117,11 @@ class ZenGardenPainter extends CustomPainter {
         ..color = _rockEdge
         ..strokeWidth = 1.0);
     }
-    // Restaurar color del rake para usos futuros (paint es mutable)
     paint
       ..color = _rake
       ..strokeWidth = _strokeW;
   }
 
-  /// Posiciones fijas de las piedras en coordenadas relativas al tamaño.
   static List<Offset> _rockCenters(Size size) => [
         Offset(size.width * 0.27, size.height * 0.37),
         Offset(size.width * 0.71, size.height * 0.64),

@@ -1,6 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'main_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,37 +20,41 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
   bool _verContrasena = false;
 
-    void _submit() async {
+  void _submit() async {
     setState(() { _cargando = true; _error = null; });
 
-    String? error;
-    if (_esRegistro) {
-      error = await _authService.registrar(
-        _correoCtrl.text.trim(),
-        _contrasenaCtrl.text.trim(),
-        _usuarioCtrl.text.trim(),
+    try {
+      if (_esRegistro) {
+        await _authService.registrar(
+          _correoCtrl.text.trim(),
+          _contrasenaCtrl.text.trim(),
+          _usuarioCtrl.text.trim(),
+        );
+      } else {
+        await _authService.iniciarSesion(
+          _correoCtrl.text.trim(),
+          _contrasenaCtrl.text.trim(),
+        );
+      }
+      // Éxito: el StreamBuilder de PantallaInicial detecta el usuario
+      // y navega a MainScreen automáticamente.
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      final msg = e.message ?? 'Error de autenticación (${e.code})';
+      setState(() => _error = msg);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: const Color(0xFFD9899A)),
       );
-    } else {
-      error = await _authService.iniciarSesion(
-        _correoCtrl.text.trim(),
-        _contrasenaCtrl.text.trim(),
+    } catch (e) {
+      // Cubre TimeoutException (dominio no autorizado / red) y otros errores.
+      if (!mounted) return;
+      final msg = 'Error: $e';
+      setState(() => _error = msg);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: const Color(0xFFD9899A)),
       );
-    }
-
-    // --- ESCUDO PROTECTOR ---
-    // Si la pantalla ya se cerró mientras esperábamos a Firebase, abortamos aquí.
-    if (!mounted) return; 
-
-    setState(() { _cargando = false; });
-
-    if (error != null) {
-      setState(() => _error = error);
-    } else {
-      // Navega al home y elimina el login del historial
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainScreen()),
-      );
+    } finally {
+      if (mounted) setState(() => _cargando = false);
     }
   }
 

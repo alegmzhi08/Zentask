@@ -26,8 +26,9 @@ class SettingsService {
 
   bool _initialized = false;
 
-  /// Carga los valores guardados. Idempotente — llamar en initState de cada screen.
-  Future<void> init() async {
+  static Future<void> init() => instance._init();
+
+  Future<void> _init() async {
     if (_initialized) return;
     _initialized = true;
     final prefs = await SharedPreferences.getInstance();

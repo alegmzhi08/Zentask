@@ -56,7 +56,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
     if (_diasSeleccionados[i]) diasElegidos.add(_diasSemana[i]);
   }
 
-  final uid = FirebaseAuth.instance.currentUser!.uid;
+  final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
   final nuevaTarea = Tarea(
     id: DateTime.now().millisecondsSinceEpoch.toString(),
