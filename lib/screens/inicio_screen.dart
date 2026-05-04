@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/tarea.dart';
 import '../services/db_service.dart';
 import '../services/economy_service.dart';
+import '../services/settings_service.dart';
 import '../widgets/zencoins_badge.dart';
 
 class InicioScreen extends StatefulWidget {
@@ -15,13 +16,12 @@ class InicioScreen extends StatefulWidget {
 }
 
 class _InicioScreenState extends State<InicioScreen> {
-  static const int _trabajoSeg = 25 * 60;
-  static const int _descansoCortaSeg = 5 * 60;
+  // El descanso largo permanece fijo; el corto y el trabajo vienen de SettingsService.
   static const int _descansoLargoSeg = 15 * 60;
   static const Color _colorTrabajo = Color(0xFF8DC49A);
 
   Timer? _timer;
-  int _segundosRestantes = _trabajoSeg;
+  int _segundosRestantes = SettingsService.instance.pomodoroDuration.value * 60;
   bool _corriendo = false;
   bool _esTrabajo = true;
   int _pomodorosEnCiclo = 0;
@@ -40,6 +40,30 @@ class _InicioScreenState extends State<InicioScreen> {
   void initState() {
     super.initState();
     _cargarDatos();
+    // Reactividad: actualizar timer cuando cambian los ajustes de Pomodoro.
+    SettingsService.instance.pomodoroDuration.addListener(_onPomodoroChanged);
+    SettingsService.instance.breakDuration.addListener(_onBreakChanged);
+    // Reactividad: recargar stats cuando se escribe en la BD desde cualquier pantalla.
+    DbService().revision.addListener(_onDbRevision);
+  }
+
+  void _onPomodoroChanged() {
+    if (_corriendo || !_esTrabajo) return;
+    final newSecs =
+        (_tareaActual?.tiempoSesion ?? SettingsService.instance.pomodoroDuration.value) * 60;
+    if (mounted) setState(() => _segundosRestantes = newSecs);
+  }
+
+  void _onBreakChanged() {
+    if (_corriendo || _esTrabajo || _pomodorosEnCiclo == 0) return;
+    if (mounted) {
+      setState(() =>
+          _segundosRestantes = SettingsService.instance.breakDuration.value * 60);
+    }
+  }
+
+  void _onDbRevision() {
+    if (mounted) { _cargarDatos(); }
   }
 
   Future<void> _cargarDatos() async {
@@ -51,6 +75,7 @@ class _InicioScreenState extends State<InicioScreen> {
     final vencidas = await _db.contarVencidas(uid);
     final racha = await _db.calcularRacha(uid);
 
+    if (!mounted) return;
     setState(() {
       _tareasHoy = tareas;
       _tareaActual = tareas.isNotEmpty ? tareas[0] : null;
@@ -59,7 +84,8 @@ class _InicioScreenState extends State<InicioScreen> {
       _pendientes = pendientes;
       _vencidas = vencidas;
       _racha = racha;
-      if (_tareaActual != null) {
+      // Solo sincroniza el timer si no está corriendo para no interrumpir sesiones.
+      if (!_corriendo && _tareaActual != null) {
         _segundosRestantes = _tareaActual!.tiempoSesion * 60;
       }
     });
@@ -113,8 +139,10 @@ class _InicioScreenState extends State<InicioScreen> {
   }
 
   int get _duracionTotal => _esTrabajo
-      ? (_tareaActual?.tiempoSesion ?? 25) * 60
-      : (_pomodorosEnCiclo == 0 ? _descansoLargoSeg : _descansoCortaSeg);
+      ? (_tareaActual?.tiempoSesion ?? SettingsService.instance.pomodoroDuration.value) * 60
+      : (_pomodorosEnCiclo == 0
+          ? _descansoLargoSeg
+          : SettingsService.instance.breakDuration.value * 60);
 
   void _iniciarPausar() {
     if (_corriendo) {
@@ -147,9 +175,9 @@ class _InicioScreenState extends State<InicioScreen> {
       if (_esTrabajo) {
         _pomodorosEnCiclo = (_pomodorosEnCiclo + 1) % 4;
         _esTrabajo = false;
-        // Recompensar minutos de foco
+        // Recompensar minutos de foco según la duración real de la sesión.
         EconomyService.instance.rewardFocusMinutes(
-          _tareaActual?.tiempoSesion ?? 25,
+          _tareaActual?.tiempoSesion ?? SettingsService.instance.pomodoroDuration.value,
         );
       } else {
         _esTrabajo = true;
@@ -168,6 +196,9 @@ class _InicioScreenState extends State<InicioScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    SettingsService.instance.pomodoroDuration.removeListener(_onPomodoroChanged);
+    SettingsService.instance.breakDuration.removeListener(_onBreakChanged);
+    DbService().revision.removeListener(_onDbRevision);
     super.dispose();
   }
 
