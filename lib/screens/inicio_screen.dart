@@ -1,15 +1,11 @@
-// lib/screens/inicio_screen.dart
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/tarea.dart';
+import '../services/db_service.dart';
 import '../services/economy_service.dart';
-import '../services/streak_service.dart';
-import '../services/task_service.dart';
-import '../widgets/streak_fire.dart';
 import '../widgets/zencoins_badge.dart';
-import '../widgets/zencoins_reward.dart';
-import '../services/settings_service.dart';
 
 class InicioScreen extends StatefulWidget {
   const InicioScreen({super.key});
@@ -19,23 +15,107 @@ class InicioScreen extends StatefulWidget {
 }
 
 class _InicioScreenState extends State<InicioScreen> {
-  // ── Timer Pomodoro ────────────────────────────────────────────────────────
+  static const int _trabajoSeg = 25 * 60;
+  static const int _descansoCortaSeg = 5 * 60;
   static const int _descansoLargoSeg = 15 * 60;
   static const Color _colorTrabajo = Color(0xFF8DC49A);
 
   Timer? _timer;
-  int _segundosRestantes = SettingsService.defaultPomodoroDuration * 60;
+  int _segundosRestantes = _trabajoSeg;
   bool _corriendo = false;
   bool _esTrabajo = true;
   int _pomodorosEnCiclo = 0;
 
-  int get _duracionTotal => _esTrabajo
-      ? SettingsService.instance.pomodoroDuration.value * 60
-      : (_pomodorosEnCiclo == 0
-            ? _descansoLargoSeg
-            : SettingsService.instance.breakDuration.value * 60);
+  List<Tarea> _tareasHoy = [];
+  Tarea? _tareaActual;
+  int _tareaIndex = 0;
+  int _completadas = 0;
+  int _pendientes = 0;
+  int _vencidas = 0;
+  int _racha = 0;
 
-  // ── Métodos del timer ─────────────────────────────────────────────────────
+  final _db = DbService();
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarDatos();
+  }
+
+  Future<void> _cargarDatos() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final hoy = DateTime.now();
+    final tareas = await _db.obtenerTareasPorFecha(uid, hoy);
+    final completadas = await _db.contarCompletadas(uid);
+    final pendientes = await _db.contarPendientes(uid);
+    final vencidas = await _db.contarVencidas(uid);
+    final racha = await _db.calcularRacha(uid);
+
+    setState(() {
+      _tareasHoy = tareas;
+      _tareaActual = tareas.isNotEmpty ? tareas[0] : null;
+      _tareaIndex = 0;
+      _completadas = completadas;
+      _pendientes = pendientes;
+      _vencidas = vencidas;
+      _racha = racha;
+      if (_tareaActual != null) {
+        _segundosRestantes = _tareaActual!.tiempoSesion * 60;
+      }
+    });
+  }
+
+  void _cambiarTarea(int index) {
+    if (index < 0 || index >= _tareasHoy.length) return;
+    setState(() {
+      _tareaIndex = index;
+      _tareaActual = _tareasHoy[index];
+      _segundosRestantes = _tareaActual!.tiempoSesion * 60;
+      _corriendo = false;
+      _timer?.cancel();
+    });
+  }
+
+  Future<void> _completarTarea() async {
+    if (_tareaActual == null) return;
+    final tarea = _tareaActual!;
+    await _db.completarTarea(tarea.id);
+
+    // Recompensar con ZenCoins
+    final aTime = !DateTime.now().isAfter(tarea.fechaEntrega);
+    await EconomyService.instance.rewardTaskCompletion(
+      multiplier: aTime ? (_racha >= 3 ? 2 : 1) : 1,
+    );
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(aTime
+              ? '¡Tarea completada a tiempo! +${EconomyService.coinsPerTask} 🐟'
+              : '¡Tarea completada! +${EconomyService.coinsPerTask} 🐟'),
+          backgroundColor: const Color(0xFF8DC49A),
+        ),
+      );
+    }
+    await _cargarDatos();
+  }
+
+  Future<void> _claimDailyQuest() async {
+    final claimed = await EconomyService.instance.claimDailyQuestReward();
+    if (claimed && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡+75 ZenCoins reclamados! 🎉'),
+          backgroundColor: Color(0xFF8DC49A),
+        ),
+      );
+    }
+  }
+
+  int get _duracionTotal => _esTrabajo
+      ? (_tareaActual?.tiempoSesion ?? 25) * 60
+      : (_pomodorosEnCiclo == 0 ? _descansoLargoSeg : _descansoCortaSeg);
+
   void _iniciarPausar() {
     if (_corriendo) {
       _timer?.cancel();
@@ -60,92 +140,34 @@ class _InicioScreenState extends State<InicioScreen> {
     });
   }
 
-  Future<void> _alTerminar() async {
+  void _alTerminar() {
     _timer?.cancel();
-    final bool eraTrabajoAntes = _esTrabajo;
     setState(() {
       _corriendo = false;
       if (_esTrabajo) {
         _pomodorosEnCiclo = (_pomodorosEnCiclo + 1) % 4;
         _esTrabajo = false;
+        // Recompensar minutos de foco
+        EconomyService.instance.rewardFocusMinutes(
+          _tareaActual?.tiempoSesion ?? 25,
+        );
       } else {
         _esTrabajo = true;
       }
       _segundosRestantes = _duracionTotal;
     });
-
-    // Recompensa solo al completar una sesión de trabajo
-    if (eraTrabajoAntes && mounted) {
-      final mins = SettingsService.instance.pomodoroDuration.value;
-      await EconomyService.instance.rewardFocusMinutes(mins);
-      if (!mounted) return;
-      ZenCoinsReward.show(context, mins * EconomyService.coinsPerFocusMinute);
-    }
-
-    final mensaje = _esTrabajo ? '¡A trabajar! 💪' : '¡Tómate un descanso! ☕';
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(mensaje), duration: const Duration(seconds: 3)),
-      );
-    }
-  }
-
-  void _onSettingsChanged() {
-    _timer?.cancel();
-    setState(() {
-      _corriendo = false;
-      _segundosRestantes = _duracionTotal;
-    });
-  }
-
-  // ── Métodos de tareas ─────────────────────────────────────────────────────
-  Future<void> _completarTarea(Tarea tarea, DateTime day) async {
-    if (tarea.isCompletedOn(day)) return;
-
-    await TaskService.instance.completarEnFecha(tarea.id, day);
-    // La racha se actualiza primero para que el multiplicador esté vigente
-    await StreakService.instance.recordActivity();
-    if (!mounted) return;
-    final mul = StreakService.instance.multiplier;
-    await EconomyService.instance.rewardTaskCompletion(multiplier: mul);
-    if (!mounted) return;
-    ZenCoinsReward.show(context, EconomyService.porTareaCompletada * mul);
-    // TODO: actualizar Firestore:
-    // FirebaseFirestore.instance.collection('tareas').doc(tarea.id)
-    //   .update({'completada': true});
-  }
-
-  Future<void> _claimDailyQuest() async {
-    final claimed = await EconomyService.instance.claimDailyQuestReward();
-    if (!mounted || !claimed) return;
-
-    ZenCoinsReward.show(context, EconomyService.dailyQuestReward);
+    final mensaje =
+        _esTrabajo ? '¡A trabajar! 💪' : '¡Tómate un descanso! ☕';
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Daily Zen Quest completada: +75 ZenCoins'),
-        duration: Duration(seconds: 3),
-      ),
+      SnackBar(
+          content: Text(mensaje),
+          duration: const Duration(seconds: 3)),
     );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    StreakService.instance.init();
-    SettingsService.instance.init();
-    TaskService.instance.init();
-    _segundosRestantes = SettingsService.instance.pomodoroDuration.value * 60;
-    SettingsService.instance.pomodoroDuration.addListener(_onSettingsChanged);
-    SettingsService.instance.breakDuration.addListener(_onSettingsChanged);
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    SettingsService.instance.pomodoroDuration.removeListener(
-      _onSettingsChanged,
-    );
-    SettingsService.instance.breakDuration.removeListener(_onSettingsChanged);
     super.dispose();
   }
 
@@ -155,61 +177,194 @@ class _InicioScreenState extends State<InicioScreen> {
     return '${min.toString().padLeft(2, '0')}:${seg.toString().padLeft(2, '0')}';
   }
 
-  Color get _colorModo => _esTrabajo ? _colorTrabajo : Colors.amber.shade600;
+  Color get _colorModo =>
+      _esTrabajo ? _colorTrabajo : Colors.amber.shade600;
 
-  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Inicio', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Zentask',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: false,
         actions: [
-          const StreakFire(),
-          const SizedBox(width: 6),
           const ZenCoinsBadge(),
           const SizedBox(width: 8),
-          IconButton(icon: const Icon(Icons.sync), onPressed: () {}),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _cargarDatos,
+          ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // ── Perfil
-            const CircleAvatar(
-              radius: 45,
-              backgroundColor: Color(0xFF8DC49A),
-              child: Icon(Icons.person, size: 50, color: Colors.white),
-            ),
-            const SizedBox(height: 12),
+            // ── Perfil ────────────────────────────────────────────────────
             FutureBuilder<void>(
-  future: FirebaseAuth.instance.currentUser?.reload(),
-  builder: (context, snapshot) {
-    final user = FirebaseAuth.instance.currentUser;
-    return Column(
-      children: [
-        Text(
-          user?.displayName ?? user?.email?.split('@')[0] ?? 'Usuario',
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
-        Text(
-          user?.email ?? '',
-          style: TextStyle(color: Colors.grey.shade600),
-        ),
-      ],
-    );
-  },
-),
-            const SizedBox(height: 28),
+              future: user?.reload(),
+              builder: (context, _) {
+                final u = FirebaseAuth.instance.currentUser;
+                return Column(
+                  children: [
+                    const CircleAvatar(
+                      radius: 45,
+                      backgroundColor: Color(0xFF8DC49A),
+                      child: Icon(Icons.person,
+                          size: 50, color: Colors.white),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      u?.displayName ??
+                          u?.email?.split('@')[0] ??
+                          'Usuario',
+                      style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      u?.email ?? '',
+                      style:
+                          TextStyle(color: Colors.grey.shade600),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 24),
 
-            // ── Timer Pomodoro
+            // ── Tarea actual ──────────────────────────────────────────────
+            if (_tareaActual != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF4EB),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: const Color(0xFFD6E8D8), width: 1.5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Tarea de hoy',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF7D9882),
+                            letterSpacing: 1)),
+                    const SizedBox(height: 6),
+                    Text(_tareaActual!.nombre,
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF3A4A3E))),
+                    Text(_tareaActual!.materia,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF7D9882))),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Entrega: ${_tareaActual!.fechaEntrega.day}/${_tareaActual!.fechaEntrega.month}/${_tareaActual!.fechaEntrega.year}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: DateTime.now().isAfter(
+                                _tareaActual!.fechaEntrega)
+                            ? Colors.red.shade400
+                            : const Color(0xFF7D9882),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Selector de tarea si hay varias
+                    if (_tareasHoy.length > 1)
+                      Row(
+                        children: List.generate(
+                          _tareasHoy.length,
+                          (i) => GestureDetector(
+                            onTap: () => _cambiarTarea(i),
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              margin:
+                                  const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: i == _tareaIndex
+                                    ? const Color(0xFF8DC49A)
+                                    : const Color(0xFFD6E8D8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+
+                    // Botón completar
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _completarTarea,
+                        icon: const Icon(
+                            Icons.check_circle_outline,
+                            color: Colors.white),
+                        label: const Text(
+                            'Marcar como completada',
+                            style:
+                                TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              const Color(0xFF8DC49A),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF4EB),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: const Color(0xFFD6E8D8), width: 1.5),
+                ),
+                child: const Column(
+                  children: [
+                    Text('🌿', style: TextStyle(fontSize: 32)),
+                    SizedBox(height: 8),
+                    Text('No hay tareas para hoy',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF3A4A3E))),
+                    Text('¡Crea una nueva tarea!',
+                        style:
+                            TextStyle(color: Color(0xFF7D9882))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ── Timer Pomodoro ────────────────────────────────────────────
             _buildTimerSection(),
             const SizedBox(height: 16),
-            _buildDailyQuestSection(),
-            const SizedBox(height: 28),
 
-            // ── Estadísticas
+            // ── Daily Zen Quest ───────────────────────────────────────────
+            _buildDailyQuestSection(),
+            const SizedBox(height: 16),
+
+            // ── Estadísticas ──────────────────────────────────────────────
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
@@ -218,17 +373,17 @@ class _InicioScreenState extends State<InicioScreen> {
               mainAxisSpacing: 12,
               childAspectRatio: 1.4,
               children: [
-                _buildStatCard('Tareas Pendientes', '0', 'Ultimos 7 días', Colors.amber.shade700),
-                _buildStatCard('Tareas Vencidas', '0', 'Total', Colors.red.shade400),
-                _buildStatCard('Tareas Completadas', '0', 'Ultimos 7 días', Colors.green.shade600),
-                _buildStatCard('Tu Racha', '0', 'Racha Total', Colors.orange.shade600),
+                _buildStatCard('Pendientes', '$_pendientes',
+                    'Sin completar', Colors.amber.shade700),
+                _buildStatCard('Completadas', '$_completadas',
+                    'Total', Colors.green.shade600),
+                _buildStatCard('Vencidas', '$_vencidas',
+                    'Sin entregar', Colors.red.shade400),
+                _buildStatCard(
+                    'Racha', '🔥 $_racha', 'Días seguidos', Colors.orange.shade600),
               ],
             ),
-            const SizedBox(height: 28),
-
-            // ── Tareas de hoy
-            _buildTareasHoySection(),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -236,6 +391,7 @@ class _InicioScreenState extends State<InicioScreen> {
   }
 
   // ── Daily Zen Quest ───────────────────────────────────────────────────────
+
   Widget _buildDailyQuestSection() {
     return ValueListenableBuilder<DailyQuestState>(
       valueListenable: EconomyService.instance.dailyQuest,
@@ -249,7 +405,8 @@ class _InicioScreenState extends State<InicioScreen> {
                     EconomyService.dailyQuestFocusGoalMinutes)
                 .clamp(0.0, 1.0)
                 .toDouble();
-        final canClaim = quest.isReadyToClaim && !quest.rewardClaimed;
+        final canClaim =
+            quest.isReadyToClaim && !quest.rewardClaimed;
 
         return Container(
           width: double.infinity,
@@ -257,10 +414,12 @@ class _InicioScreenState extends State<InicioScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFD6E8D8), width: 1.4),
+            border: Border.all(
+                color: const Color(0xFFD6E8D8), width: 1.4),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF8DC49A).withValues(alpha: 0.08),
+                color: const Color(0xFF8DC49A)
+                    .withValues(alpha: 0.08),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -278,11 +437,8 @@ class _InicioScreenState extends State<InicioScreen> {
                       color: const Color(0xFFEAF4EB),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(
-                      Icons.spa_rounded,
-                      color: Color(0xFF8DC49A),
-                      size: 21,
-                    ),
+                    child: const Icon(Icons.spa_rounded,
+                        color: Color(0xFF8DC49A), size: 21),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
@@ -297,9 +453,7 @@ class _InicioScreenState extends State<InicioScreen> {
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
+                        horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFF4CC),
                       borderRadius: BorderRadius.circular(16),
@@ -348,15 +502,18 @@ class _InicioScreenState extends State<InicioScreen> {
                     quest.rewardClaimed
                         ? 'Reclamado por hoy'
                         : canClaim
-                        ? 'Reclamar +75'
-                        : 'Completa una meta',
+                            ? 'Reclamar +75'
+                            : 'Completa una meta',
                   ),
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF8DC49A),
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: const Color(0xFFEAF4EB),
-                    disabledForegroundColor: const Color(0xFF7D9882),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    disabledBackgroundColor:
+                        const Color(0xFFEAF4EB),
+                    disabledForegroundColor:
+                        const Color(0xFF7D9882),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12),
                   ),
                 ),
               ),
@@ -385,23 +542,19 @@ class _InicioScreenState extends State<InicioScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      label,
+                    child: Text(label,
+                        style: const TextStyle(
+                          color: Color(0xFF3A4A3E),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        )),
+                  ),
+                  Text(value,
                       style: const TextStyle(
-                        color: Color(0xFF3A4A3E),
+                        color: Color(0xFF7D9882),
                         fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      color: Color(0xFF7D9882),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
+                        fontSize: 12,
+                      )),
                 ],
               ),
               const SizedBox(height: 6),
@@ -411,7 +564,8 @@ class _InicioScreenState extends State<InicioScreen> {
                   value: progress,
                   minHeight: 7,
                   backgroundColor: const Color(0xFFEAF4EB),
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(color),
                 ),
               ),
             ],
@@ -421,169 +575,23 @@ class _InicioScreenState extends State<InicioScreen> {
     );
   }
 
-  // ── Sección de tareas ─────────────────────────────────────────────────────
-  Widget _buildTareasHoySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 4, bottom: 12),
-          child: Text(
-            'TAREAS DE HOY',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
-              color: Color(0xFF7D9882),
-            ),
-          ),
-        ),
-        ValueListenableBuilder<List<Tarea>>(
-          valueListenable: TaskService.instance.tareas,
-          builder: (context, tareas, _) {
-            final today = DateTime.now();
-            final tareasHoy = TaskService.instance.getTasksForDate(today);
+  // ── Timer ─────────────────────────────────────────────────────────────────
 
-            if (tareasHoy.isEmpty) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    '¡Día libre! No tienes tareas para hoy',
-                    style: TextStyle(color: Color(0xFF7D9882)),
-                  ),
-                ),
-              );
-            }
-
-            return Column(
-              children: tareasHoy.map((tarea) {
-                final completada = tarea.isCompletedOn(today);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: GestureDetector(
-                    onTap: completada
-                        ? null
-                        : () => _completarTarea(tarea, today),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                      decoration: BoxDecoration(
-                        color: completada
-                            ? const Color(0xFFEAF4EB)
-                            : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: completada
-                              ? const Color(0xFF8DC49A)
-                              : const Color(0xFFE8E8E8),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          // Checkbox circular animado
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 250),
-                            width: 26,
-                            height: 26,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: completada
-                                  ? const Color(0xFF8DC49A)
-                                  : Colors.transparent,
-                              border: Border.all(
-                                color: completada
-                                    ? const Color(0xFF8DC49A)
-                                    : const Color(0xFFD6E8D8),
-                                width: 2,
-                              ),
-                            ),
-                            child: completada
-                                ? const Icon(
-                                    Icons.check_rounded,
-                                    size: 16,
-                                    color: Colors.white,
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                AnimatedDefaultTextStyle(
-                                  duration: const Duration(milliseconds: 300),
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: completada
-                                        ? const Color(0xFF7D9882)
-                                        : const Color(0xFF3A4A3E),
-                                    decoration: completada
-                                        ? TextDecoration.lineThrough
-                                        : TextDecoration.none,
-                                    decorationColor: const Color(0xFF7D9882),
-                                  ),
-                                  child: Text(tarea.nombre),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  tarea.materia,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF7D9882),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            child: completada
-                                ? const Text(
-                                    '🐟',
-                                    key: ValueKey('done'),
-                                    style: TextStyle(fontSize: 18),
-                                  )
-                                : const Icon(
-                                    Icons.chevron_right,
-                                    key: ValueKey('pending'),
-                                    color: Color(0xFFD6E8D8),
-                                    size: 20,
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  // ── Sección del timer ─────────────────────────────────────────────────────
   Widget _buildTimerSection() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      padding: const EdgeInsets.symmetric(
+          vertical: 24, horizontal: 20),
       decoration: BoxDecoration(
         color: const Color(0xFFEAF4EB),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFD6E8D8), width: 1.5),
+        border: Border.all(
+            color: const Color(0xFFD6E8D8), width: 1.5),
       ),
       child: Column(
         children: [
-          // Chip de modo
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
               color: _colorModo.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(20),
@@ -591,18 +599,16 @@ class _InicioScreenState extends State<InicioScreen> {
             child: Text(
               _esTrabajo
                   ? 'Trabajo'
-                  : (_pomodorosEnCiclo == 0 ? 'Descanso largo' : 'Descanso'),
+                  : (_pomodorosEnCiclo == 0
+                      ? 'Descanso largo'
+                      : 'Descanso'),
               style: TextStyle(
-                color: _colorModo,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                letterSpacing: 0.5,
-              ),
+                  color: _colorModo,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13),
             ),
           ),
           const SizedBox(height: 24),
-
-          // Círculo del timer
           SizedBox(
             width: 160,
             height: 160,
@@ -616,25 +622,26 @@ class _InicioScreenState extends State<InicioScreen> {
                     value: _segundosRestantes / _duracionTotal,
                     strokeWidth: 9,
                     backgroundColor: const Color(0xFFD6E8D8),
-                    valueColor: AlwaysStoppedAnimation<Color>(_colorModo),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                        _colorModo),
                     strokeCap: StrokeCap.round,
                   ),
                 ),
                 Text(
                   _tiempoFormateado,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 38,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF3A4A3E),
-                    fontFeatures: [FontFeature.tabularFigures()],
+                    color: const Color(0xFF3A4A3E),
+                    fontFeatures: const [
+                      FontFeature.tabularFigures()
+                    ],
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 24),
-
-          // Controles
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -643,7 +650,6 @@ class _InicioScreenState extends State<InicioScreen> {
                 icon: const Icon(Icons.refresh_rounded),
                 iconSize: 28,
                 color: const Color(0xFF7D9882),
-                tooltip: 'Reiniciar',
               ),
               const SizedBox(width: 16),
               GestureDetector(
@@ -656,14 +662,17 @@ class _InicioScreenState extends State<InicioScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: _colorModo.withValues(alpha: 0.35),
+                        color:
+                            _colorModo.withValues(alpha: 0.35),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
                     ],
                   ),
                   child: Icon(
-                    _corriendo ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    _corriendo
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded,
                     color: Colors.white,
                     size: 36,
                   ),
@@ -674,21 +683,22 @@ class _InicioScreenState extends State<InicioScreen> {
             ],
           ),
           const SizedBox(height: 20),
-
-          // Dots del ciclo
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(4, (i) {
               final completado = i < _pomodorosEnCiclo;
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   width: completado ? 10 : 8,
                   height: completado ? 10 : 8,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: completado ? _colorTrabajo : const Color(0xFFD6E8D8),
+                    color: completado
+                        ? _colorTrabajo
+                        : const Color(0xFFD6E8D8),
                   ),
                 ),
               );
@@ -700,17 +710,15 @@ class _InicioScreenState extends State<InicioScreen> {
   }
 
   // ── Stat card ─────────────────────────────────────────────────────────────
+
   Widget _buildStatCard(
-    String title,
-    String count,
-    String subtitle,
-    Color color,
-  ) {
+      String title, String count, String subtitle, Color color) {
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -720,30 +728,23 @@ class _InicioScreenState extends State<InicioScreen> {
                 Icon(Icons.circle, size: 10, color: color),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(title,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis),
                 ),
               ],
             ),
             const Spacer(),
-            Text(
-              count,
-              style: TextStyle(
-                color: color,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              subtitle,
-              style: const TextStyle(color: Colors.grey, fontSize: 11),
-            ),
+            Text(count,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold)),
+            Text(subtitle,
+                style: const TextStyle(
+                    color: Colors.grey, fontSize: 11)),
           ],
         ),
       ),

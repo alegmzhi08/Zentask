@@ -78,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           fontStyle: FontStyle.italic,
                         )),
                     SizedBox(height: 4),
-                    Text('flujo sin esfuerzo',
+                    Text('Esfuerzo sin estrés',
                         style: TextStyle(
                           fontSize: 12,
                           color: Color(0xFF7D9882),

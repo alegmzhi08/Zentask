@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/tarea.dart';
+import '../services/db_service.dart';
 
 class CrearTareaScreen extends StatefulWidget {
   const CrearTareaScreen({super.key});
@@ -40,34 +41,46 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
     }
   }
 
-  void _guardarTarea() {
-    if (_nombreCtrl.text.isEmpty ||
-        _materiaCtrl.text.isEmpty ||
-        _fechaEntrega == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor completa todos los campos')),
-      );
-      return;
-    }
-
-    final diasElegidos = <String>[];
-    for (int i = 0; i < _diasSemana.length; i++) {
-      if (_diasSeleccionados[i]) diasElegidos.add(_diasSemana[i]);
-    }
-
-    final nuevaTarea = Tarea(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      nombre: _nombreCtrl.text,
-      materia: _materiaCtrl.text,
-      fechaEntrega: _fechaEntrega!,
-      diasTrabajo: diasElegidos,
-      tiempoSesion: _tiempoSesion,
-      sesionesPorDia: _sesionesPorDia,
+ void _guardarTarea() async {
+  if (_nombreCtrl.text.isEmpty ||
+      _materiaCtrl.text.isEmpty ||
+      _fechaEntrega == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Por favor completa todos los campos')),
     );
-
-    debugPrint('Tarea creada: ${nuevaTarea.nombre}');
-    Navigator.pop(context, nuevaTarea);
+    return;
   }
+
+  final diasElegidos = <String>[];
+  for (int i = 0; i < _diasSemana.length; i++) {
+    if (_diasSeleccionados[i]) diasElegidos.add(_diasSemana[i]);
+  }
+
+  final uid = FirebaseAuth.instance.currentUser!.uid;
+
+  final nuevaTarea = Tarea(
+    id: DateTime.now().millisecondsSinceEpoch.toString(),
+    nombre: _nombreCtrl.text,
+    materia: _materiaCtrl.text,
+    fechaEntrega: _fechaEntrega!,
+    startDate: _startDate,
+    endDate: _endDate,
+    diasTrabajo: diasElegidos,
+    tiempoSesion: _tiempoSesion,
+    sesionesPorDia: _sesionesPorDia,
+    uid: uid,
+  );
+
+  // Guarda en SQLite
+  await DbService().insertarTarea(nuevaTarea);
+
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('¡Tarea creada exitosamente! ✓')),
+    );
+    _resetForm();
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -137,7 +150,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             const SizedBox(height: 16),
 
             // ── Rango de fechas ───────────────────────────────────────────
-            _label('Rango de fechas'),
+            _label('Fechas a trabajar'),
             _DateTile(
               icon: Icons.date_range_outlined,
               label: _dateRangeLabel,
@@ -243,15 +256,11 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  List<int> get _workingDays => [
-    for (int i = 0; i < _diasSeleccionados.length; i++)
-      if (_diasSeleccionados[i]) i + 1,
-  ];
-
   void _resetForm() {
     setState(() {
       _nombreCtrl.clear();
       _materiaCtrl.clear();
+      _fechaEntrega = null;
       _startDate = null;
       _endDate = null;
       _tiempoSesion = 25;
