@@ -73,8 +73,8 @@ class CatGardenWidget extends StatelessWidget {
                 ),
 
                 // ── Capa 1: Estanques + rocas (tier 1+) ─────────────────────
-                // Orden: top ascendente → pond_2 primero (fondo), pond_1 al último
-                // (frente). Las rocas se intercalan por profundidad.
+                // Orden: top ascendente → pond_2 primero (fondo), pond_1 al último.
+                // Rocas ancladas cerca de los estanques, fuera del centro.
                 _decorLayer(
                   visible: tier >= 1,
                   children: [
@@ -84,10 +84,10 @@ class CatGardenWidget extends StatelessWidget {
                       top: 0,
                       child: _img(_kPond2, 135),
                     ),
-                    // rock_2: franja media-derecha
-                    _decor(_kRock2, left: w * 0.76, top: h * 0.48, size: 84),
-                    // rock_1: franja inferior-izquierda
-                    _decor(_kRock1, left: w * 0.06, top: h * 0.70, size: 90),
+                    // rock_2: flanco derecho, adyacente a pond_2
+                    _decor(_kRock2, left: w * 0.65, top: h * 0.20, size: 84),
+                    // rock_1: flanco izquierdo, adyacente a pond_1
+                    _decor(_kRock1, left: w * 0.04, top: h * 0.72, size: 90),
                     // pond_1: esquina inferior-izquierda (más cercana, pinta al último)
                     Positioned(
                       left: 0,
@@ -98,33 +98,29 @@ class CatGardenWidget extends StatelessWidget {
                 ),
 
                 // ── Capa 2: Vegetación + 3 linternas (tier 2+) ──────────────
-                // Orden estricto: top ascendente = profundidad isométrica correcta.
+                // Layout perimetral: elementos pegados a los bordes para dejar
+                // el centro despejado como área de caminata de los Gatos.
                 //
-                // Distribución de bonsáis (>15% de separación entre sí):
-                //   • bonsai   → zona izquierda  (left ~4%)
-                //   • bonsai_2 → zona dcha-alta   (left ~60%, cerca de pond_2)
-                //
-                // Arbustos como conectores, no como muros:
-                //   • bush_1 → conector entre lantern_2 y zona derecha (left ~52%)
-                //   • bush_2 → conector hacia pond_1, bajo izquierda  (left ~24%)
+                // Corredor izquierdo: bonsai, lantern_2 (linterna principal), lantern
+                // Corredor derecho:   bonsai_2, bush_1, lantern_3
+                // Bajo izquierda:     bush_2 (transición hacia pond_1)
                 _decorLayer(
                   visible: tier >= 2,
                   children: [
-                    // top h*0.22 — lanterna central (ancla zona media)
-                    _decor(_kLantern2, left: w * 0.40, top: h * 0.22, size: 60),
-                    // top h*0.28 — bonsai_2: dcha-media, base debajo de pond_2
-                    // (pond_2 ocupa top 0..135px ≈ 0..16%h; h*0.28 queda siempre libre)
-                    _decor(_kBonsai2,  left: w * 0.58, top: h * 0.28, size: 88),
-                    // top h*0.30 — bonsai: zona izquierda (>50% sep. horizontal)
-                    _decor(_kBonsai,   left: w * 0.04, top: h * 0.30, size: 88),
-                    // top h*0.35 — bush_1: conector junto a lantern_2, aireado
-                    _decor(_kBush1,    left: w * 0.52, top: h * 0.35, size: 84),
-                    // top h*0.44 — lanterna izquierda
-                    _decor(_kLantern,  left: w * 0.10, top: h * 0.44, size: 60),
-                    // top h*0.58 — lanterna derecha (franja inferior)
-                    _decor(_kLantern3, left: w * 0.70, top: h * 0.58, size: 60),
-                    // top h*0.66 — bush_2: conector en el camino hacia pond_1
-                    _decor(_kBush2,    left: w * 0.24, top: h * 0.66, size: 84),
+                    // h*0.22 — bonsai_2: flanco derecho, bajo el área de pond_2
+                    _decor(_kBonsai2,  left: w * 0.62, top: h * 0.22, size: 88),
+                    // h*0.28 — bonsai: borde izquierdo superior
+                    _decor(_kBonsai,   left: w * 0.02, top: h * 0.28, size: 88),
+                    // h*0.36 — lantern_2: lateral izquierdo (balancea el peso visual derecho)
+                    _decor(_kLantern2, left: w * 0.06, top: h * 0.36, size: 60),
+                    // h*0.42 — bush_1: borde derecho medio
+                    _decor(_kBush1,    left: w * 0.74, top: h * 0.42, size: 84),
+                    // h*0.52 — lantern: lateral izquierdo (par con lantern_2)
+                    _decor(_kLantern,  left: w * 0.06, top: h * 0.52, size: 60),
+                    // h*0.60 — lantern_3: borde derecho inferior
+                    _decor(_kLantern3, left: w * 0.74, top: h * 0.60, size: 60),
+                    // h*0.70 — bush_2: flanco izquierdo, transición hacia pond_1
+                    _decor(_kBush2,    left: w * 0.10, top: h * 0.70, size: 84),
                   ],
                 ),
 
