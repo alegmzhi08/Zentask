@@ -6,6 +6,9 @@ import '../models/tarea.dart';
 import '../services/db_service.dart';
 import '../services/economy_service.dart';
 import '../services/settings_service.dart';
+import '../services/streak_service.dart';
+import '../widgets/streak_fire.dart';
+import '../widgets/zen_streak_widget.dart';
 import '../widgets/zencoins_badge.dart';
 
 class InicioScreen extends StatefulWidget {
@@ -39,6 +42,7 @@ class _InicioScreenState extends State<InicioScreen> {
   @override
   void initState() {
     super.initState();
+    StreakService.instance.init();
     _cargarDatos();
     // Reactividad: actualizar timer cuando cambian los ajustes de Pomodoro.
     SettingsService.instance.pomodoroDuration.addListener(_onPomodoroChanged);
@@ -76,6 +80,7 @@ class _InicioScreenState extends State<InicioScreen> {
     final racha = await _db.calcularRacha(uid);
 
     if (!mounted) return;
+    StreakService.instance.streak.value = racha;
     setState(() {
       _tareasHoy = tareas;
       _tareaActual = tareas.isNotEmpty ? tareas[0] : null;
@@ -221,6 +226,8 @@ class _InicioScreenState extends State<InicioScreen> {
             style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: false,
         actions: [
+          const StreakFire(),
+          const SizedBox(width: 8),
           const ZenCoinsBadge(),
           const SizedBox(width: 8),
           IconButton(
@@ -264,7 +271,9 @@ class _InicioScreenState extends State<InicioScreen> {
                 );
               },
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            const ZenStreakWidget(),
+            const SizedBox(height: 16),
 
             // ── Tarea actual ──────────────────────────────────────────────
             if (_tareaActual != null) ...[
