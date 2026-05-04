@@ -849,10 +849,11 @@ class _ZenQuestSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Handle
           Center(
             child: Container(
@@ -983,7 +984,8 @@ class _ZenQuestSheet extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.w700)),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -83,7 +83,9 @@ class _CalendarioScreenState extends State<CalendarioScreen> {
             Expanded(child: _buildDailyTimeline(_tareasDelDia))
           else ...[
             // ── Calendario ────────────────────────────────────────────────
-            TableCalendar(
+            Flexible(
+              flex: 2,
+              child: TableCalendar(
               firstDay: DateTime(2020),
               lastDay: DateTime(2100),
               focusedDay: _focusedDay,
@@ -162,6 +164,7 @@ class _CalendarioScreenState extends State<CalendarioScreen> {
                 headerPadding:
                     EdgeInsets.symmetric(vertical: 10),
               ),
+            ),
             ),
 
             const Divider(height: 1, color: Color(0xFFD6E8D8)),
