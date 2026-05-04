@@ -56,7 +56,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
               FirebaseAuth.instance.currentUser?.email ?? 'Sin correo'),
             trailing: const Icon(Icons.edit_outlined),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: () {},
+            onTap: _proximamente,
           ),
 
           // ── APARIENCIA ─────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
             secondary: const Icon(Icons.dark_mode_outlined),
             title: const Text('Modo Oscuro'),
             value: _modoOscuro,
-            onChanged: (value) => setState(() => _modoOscuro = value),
+            onChanged: (_) => _proximamente(),
           ),
           ListTile(
             leading: const Icon(Icons.palette_outlined),
@@ -86,7 +86,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
                 const Icon(Icons.chevron_right),
               ],
             ),
-            onTap: () {},
+            onTap: _proximamente,
           ),
 
           // ── PRODUCTIVIDAD Y ENFOQUE ────────────────────────────────────────
@@ -113,14 +113,14 @@ class _AjustesScreenState extends State<AjustesScreen> {
             title: const Text('Modo Estricto'),
             subtitle: const Text('Bloquea distracciones durante sesiones'),
             value: _modoEstricto,
-            onChanged: (value) => setState(() => _modoEstricto = value),
+            onChanged: (_) => _proximamente(),
           ),
           SwitchListTile(
             secondary: const Icon(Icons.notifications_outlined),
             title: const Text('Recordatorios de Tareas'),
             subtitle: const Text('Notificaciones antes de la fecha de entrega'),
             value: _recordatorios,
-            onChanged: (value) => setState(() => _recordatorios = value),
+            onChanged: (_) => _proximamente(),
           ),
 
           // ── GAMIFICACIÓN ───────────────────────────────────────────────────
@@ -130,14 +130,14 @@ class _AjustesScreenState extends State<AjustesScreen> {
             title: const Text('Notificaciones de Racha'),
             subtitle: const Text('Recibe motivación para mantener tu racha diaria'),
             value: _notificacionesRacha,
-            onChanged: (value) => setState(() => _notificacionesRacha = value),
+            onChanged: (_) => _proximamente(),
           ),
           ListTile(
             leading: const Icon(Icons.emoji_events_outlined),
             title: const Text('Meta Diaria'),
             subtitle: const Text('Completar 3 tareas'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () {},
+            onTap: _proximamente,
           ),
 
           // ── CUENTA ─────────────────────────────────────────────────────────
@@ -153,7 +153,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
             ),
             subtitle: const Text('Desbloquea todas las funciones de Zentask'),
             trailing: Icon(Icons.chevron_right, color: colorScheme.primary),
-            onTap: () {},
+            onTap: _proximamente,
           ),
           const Divider(indent: 16, endIndent: 16),
           ListTile(
@@ -225,6 +225,17 @@ class _AjustesScreenState extends State<AjustesScreen> {
           letterSpacing: 1.2,
           color: Theme.of(context).colorScheme.primary,
         ),
+      ),
+    );
+  }
+
+  void _proximamente() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('🚀 Función en desarrollo para ZenTask 2.0. ¡Mantente Zen!'),
+        backgroundColor: Color(0xFF3A4A3E),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
       ),
     );
   }

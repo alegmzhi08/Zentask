@@ -143,6 +143,25 @@ class _InicioScreenState extends State<InicioScreen> {
     }
   }
 
+  void _showZenQuestModal() {
+    final totalHoy = _tareasHoy.length;
+    final completadasHoy = _tareasHoy.where((t) => t.completada).length;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ZenQuestSheet(
+        pendientes: _pendientes,
+        completadasHoy: completadasHoy,
+        totalHoy: totalHoy,
+        vencidas: _vencidas,
+        racha: _racha,
+        completadasTotal: _completadas,
+      ),
+    );
+  }
+
   int get _duracionTotal => _esTrabajo
       ? (_tareaActual?.tiempoSesion ?? SettingsService.instance.pomodoroDuration.value) * 60
       : (_pomodorosEnCiclo == 0
@@ -222,8 +241,14 @@ class _InicioScreenState extends State<InicioScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Zentask',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/bicato.png', width: 28, height: 28, fit: BoxFit.contain),
+            const SizedBox(width: 8),
+            const Text('Zentask', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
         centerTitle: false,
         actions: [
           const StreakFire(),
@@ -401,7 +426,10 @@ class _InicioScreenState extends State<InicioScreen> {
             const SizedBox(height: 16),
 
             // ── Daily Zen Quest ───────────────────────────────────────────
-            _buildDailyQuestSection(),
+            GestureDetector(
+              onTap: _showZenQuestModal,
+              child: _buildDailyQuestSection(),
+            ),
             const SizedBox(height: 16),
 
             // ── Estadísticas ──────────────────────────────────────────────
@@ -788,6 +816,204 @@ class _InicioScreenState extends State<InicioScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Modal de ZenQuest ─────────────────────────────────────────────────────────
+
+class _ZenQuestSheet extends StatelessWidget {
+  const _ZenQuestSheet({
+    required this.pendientes,
+    required this.completadasHoy,
+    required this.totalHoy,
+    required this.vencidas,
+    required this.racha,
+    required this.completadasTotal,
+  });
+
+  final int pendientes;
+  final int completadasHoy;
+  final int totalHoy;
+  final int vencidas;
+  final int racha;
+  final int completadasTotal;
+
+  @override
+  Widget build(BuildContext context) {
+    final progreso =
+        totalHoy > 0 ? (completadasHoy / totalHoy).clamp(0.0, 1.0) : 0.0;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD6E8D8),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Header
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF4EB),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.spa_rounded,
+                    color: Color(0xFF8DC49A), size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Daily Zen Quest',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF3A4A3E))),
+                  Text('Tu progreso de hoy',
+                      style: TextStyle(
+                          fontSize: 12, color: Color(0xFF7D9882))),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Barra de progreso tareas del día
+          Row(
+            children: [
+              Text('$completadasHoy / $totalHoy tareas completadas hoy',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF3A4A3E))),
+              const Spacer(),
+              Text('${(progreso * 100).round()}%',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF8DC49A))),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progreso,
+              minHeight: 10,
+              backgroundColor: const Color(0xFFEAF4EB),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(Color(0xFF8DC49A)),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Divider(color: Color(0xFFEAF4EB), height: 1),
+          const SizedBox(height: 20),
+
+          // Cuadrícula de estadísticas
+          Row(
+            children: [
+              Expanded(
+                child: _statCell(
+                  icon: Icons.hourglass_top_rounded,
+                  value: '$pendientes',
+                  label: 'Pendientes',
+                  color: Colors.amber.shade700,
+                ),
+              ),
+              Expanded(
+                child: _statCell(
+                  icon: Icons.check_circle_outline_rounded,
+                  value: '$completadasTotal',
+                  label: 'Completadas',
+                  color: Colors.green.shade600,
+                ),
+              ),
+              Expanded(
+                child: _statCell(
+                  icon: Icons.warning_amber_rounded,
+                  value: '$vencidas',
+                  label: 'Vencidas',
+                  color: Colors.red.shade400,
+                ),
+              ),
+              Expanded(
+                child: _statCell(
+                  icon: Icons.local_fire_department_rounded,
+                  value: '$racha',
+                  label: 'Racha',
+                  color: Colors.orange.shade600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Botón cerrar
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF7D9882),
+                side: const BorderSide(color: Color(0xFFD6E8D8)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              child: const Text('Cerrar',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statCell({
+    required IconData icon,
+    required String value,
+    required String label,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(height: 6),
+        Text(value,
+            style: TextStyle(
+                fontSize: 17, fontWeight: FontWeight.w800, color: color)),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 11, color: Color(0xFF7D9882))),
+      ],
     );
   }
 }

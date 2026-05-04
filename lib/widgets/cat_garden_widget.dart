@@ -4,22 +4,30 @@ import 'zen_garden_painter.dart';
 import 'garden/interactive_cat_widget.dart';
 
 // ── Rutas de assets del jardín ────────────────────────────────────────────────
-const _kRock1   = 'assets/images/game/garden/rock_1.png';
-const _kRock2   = 'assets/images/game/garden/rock_2.png';
-const _kBush1   = 'assets/images/game/garden/bush_1.png';
-const _kBush2   = 'assets/images/game/garden/bush_2.png';
-const _kLantern = 'assets/images/game/garden/lantern.png';
-const _kBonsai  = 'assets/images/game/garden/bonsai.png';
-const _kSakura  = 'assets/images/game/garden/sakura.png';
+const _kRock1    = 'assets/images/game/garden/rock_1.png';
+const _kRock2    = 'assets/images/game/garden/rock_2.png';
+const _kBush1    = 'assets/images/game/garden/bush_1.png';
+const _kBush2    = 'assets/images/game/garden/bush_2.png';
+const _kLantern  = 'assets/images/game/garden/lantern.png';
+const _kLantern2 = 'assets/images/game/garden/lantern_2.png';
+const _kLantern3 = 'assets/images/game/garden/lantern_3.png';
+const _kBonsai   = 'assets/images/game/garden/bonsai.png';
+const _kBonsai2  = 'assets/images/game/garden/bonsai_2.png';
+const _kSakura   = 'assets/images/game/garden/sakura.png';
+const _kSakura2  = 'assets/images/game/garden/sakura_2.png';
+const _kPond1    = 'assets/images/game/garden/pond_1.png';
+const _kPond2    = 'assets/images/game/garden/pond_2.png';
+const _kBicato   = 'assets/bicato.png';
 
 /// Jardín interactivo donde los gatos se mueven de forma autónoma.
 ///
 /// Z-index del Stack (de atrás hacia adelante):
-///   0 – Fondo procedural [ZenGardenPainter] (gradiente oscuro)
-///   1 – Rocas            (tier 1+, ancladas al fondo como suelo)
-///   2 – Arbustos, bonsai, linterna (tier 2+, plano medio)
-///   3 – Gatos animados   (centro del jardín)
-///   4 – Cerezo sakura    (tier 3, esquina superior-derecha)
+///   0 – Fondo procedural [ZenGardenPainter] (gradiente pastel)
+///   0.5 – Marca de agua Bicato (opacidad 0.04)
+///   1 – Estanques + rocas   (tier 1+, ordenados por top asc = profundidad)
+///   2 – Vegetación + 3 linternas (tier 2+, ordenados por top asc = profundidad)
+///   3 – Gatos animados
+///   4 – Sakura (tier 3, dosel superior)
 class CatGardenWidget extends StatelessWidget {
   const CatGardenWidget({super.key, required this.provider});
 
@@ -50,25 +58,73 @@ class CatGardenWidget extends StatelessWidget {
                   ),
                 ),
 
-                // ── Capa 1: Rocas (tier 1+) — ancladas al suelo ─────────────
-                // Posicionadas en la franja inferior para crear un plano base
-                // que visualmente "ancla" a los gatos.
+                // ── Capa 0.5: Marca de agua Bicato ──────────────────────────
+                Positioned.fill(
+                  child: Center(
+                    child: Opacity(
+                      opacity: 0.04,
+                      child: Image.asset(
+                        _kBicato,
+                        width: w * 0.55,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ── Capa 1: Estanques + rocas (tier 1+) ─────────────────────
+                // Orden: top ascendente → pond_2 primero (fondo), pond_1 al último
+                // (frente). Las rocas se intercalan por profundidad.
                 _decorLayer(
                   visible: tier >= 1,
                   children: [
-                    _decor(_kRock1, left: w * 0.04, top: h * 0.78, size: 92),
-                    _decor(_kRock2, left: w * 0.70, top: h * 0.80, size: 86),
+                    // pond_2: esquina superior-derecha (más lejana, pinta primero)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: _img(_kPond2, 135),
+                    ),
+                    // rock_2: franja media-derecha
+                    _decor(_kRock2, left: w * 0.76, top: h * 0.48, size: 84),
+                    // rock_1: franja inferior-izquierda
+                    _decor(_kRock1, left: w * 0.06, top: h * 0.70, size: 90),
+                    // pond_1: esquina inferior-izquierda (más cercana, pinta al último)
+                    Positioned(
+                      left: 0,
+                      bottom: 0,
+                      child: _img(_kPond1, 135),
+                    ),
                   ],
                 ),
 
-                // ── Capa 2: Arbustos, bonsai y linterna (tier 2+) ───────────
+                // ── Capa 2: Vegetación + 3 linternas (tier 2+) ──────────────
+                // Orden estricto: top ascendente = profundidad isométrica correcta.
+                //
+                // Distribución de bonsáis (>15% de separación entre sí):
+                //   • bonsai   → zona izquierda  (left ~4%)
+                //   • bonsai_2 → zona dcha-alta   (left ~60%, cerca de pond_2)
+                //
+                // Arbustos como conectores, no como muros:
+                //   • bush_1 → conector entre lantern_2 y zona derecha (left ~52%)
+                //   • bush_2 → conector hacia pond_1, bajo izquierda  (left ~24%)
                 _decorLayer(
                   visible: tier >= 2,
                   children: [
-                    _decor(_kBush2,   left: w * 0.02, top: h * 0.22, size: 88),
-                    _decor(_kBonsai,  left: w * 0.07, top: h * 0.48, size: 88),
-                    _decor(_kBush1,   left: w * 0.56, top: h * 0.53, size: 94),
-                    _decor(_kLantern, left: w * 0.43, top: h * 0.63, size: 58),
+                    // top h*0.22 — lanterna central (ancla zona media)
+                    _decor(_kLantern2, left: w * 0.40, top: h * 0.22, size: 60),
+                    // top h*0.28 — bonsai_2: dcha-media, base debajo de pond_2
+                    // (pond_2 ocupa top 0..135px ≈ 0..16%h; h*0.28 queda siempre libre)
+                    _decor(_kBonsai2,  left: w * 0.58, top: h * 0.28, size: 88),
+                    // top h*0.30 — bonsai: zona izquierda (>50% sep. horizontal)
+                    _decor(_kBonsai,   left: w * 0.04, top: h * 0.30, size: 88),
+                    // top h*0.35 — bush_1: conector junto a lantern_2, aireado
+                    _decor(_kBush1,    left: w * 0.52, top: h * 0.35, size: 84),
+                    // top h*0.44 — lanterna izquierda
+                    _decor(_kLantern,  left: w * 0.10, top: h * 0.44, size: 60),
+                    // top h*0.58 — lanterna derecha (franja inferior)
+                    _decor(_kLantern3, left: w * 0.70, top: h * 0.58, size: 60),
+                    // top h*0.66 — bush_2: conector en el camino hacia pond_1
+                    _decor(_kBush2,    left: w * 0.24, top: h * 0.66, size: 84),
                   ],
                 ),
 
@@ -86,9 +142,9 @@ class CatGardenWidget extends StatelessWidget {
                     ),
                   ),
 
-                // ── Capa 4: Cerezo sakura (tier 3, techo superior-derecho) ───
-                // Los gatos que pasen por esa zona quedan visualmente "bajo"
-                // las ramas al estar en una capa inferior.
+                // ── Capa 4: Sakura (tier 3, dosel superior) ─────────────────
+                // sakura cubre esquina superior-derecha (sobre pond_2).
+                // sakura_2 como contrapunto en esquina superior-izquierda.
                 _decorLayer(
                   visible: tier >= 3,
                   children: [
@@ -96,6 +152,11 @@ class CatGardenWidget extends StatelessWidget {
                       right: 0,
                       top: 0,
                       child: _img(_kSakura, 175),
+                    ),
+                    Positioned(
+                      left: 0,
+                      top: h * 0.06,
+                      child: _img(_kSakura2, 130),
                     ),
                   ],
                 ),

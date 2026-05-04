@@ -26,6 +26,34 @@ class _GaticosScreenState extends State<GaticosScreen> {
     super.dispose();
   }
 
+  // ── Gestos ocultos del fondo (solo demo) ─────────────────────────────────
+
+  Future<void> _onGardenDoubleTap() async {
+    await EconomyService.instance.addCoins(1000);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('✨ El jardín florece... (+1000 ZenCoins)'),
+        backgroundColor: Color(0xFF3A4A3E),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _onGardenLongPress() {
+    _gardenProvider.enableDemoMode();
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('🎯 Modo demo activo — Gatos desbloqueados ✓'),
+        backgroundColor: Color(0xFF3A4A3E),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   Future<void> _onBuyCat() async {
     final success = await _gardenProvider.buyCat();
     if (!mounted) return;
@@ -33,7 +61,7 @@ class _GaticosScreenState extends State<GaticosScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Necesitas ${CatGardenProvider.catCost} 🐟 para adoptar un gatico',
+            'Necesitas ${CatGardenProvider.catCost} 🐟 para adoptar un gato',
           ),
           backgroundColor: Color(0xFF5D4037),
           behavior: SnackBarBehavior.floating,
@@ -71,7 +99,11 @@ class _GaticosScreenState extends State<GaticosScreen> {
           ),
         ],
       ),
-      body: CatGardenWidget(provider: _gardenProvider),
+      body: GestureDetector(
+        onDoubleTap: _onGardenDoubleTap,
+        onLongPress: _onGardenLongPress,
+        child: CatGardenWidget(provider: _gardenProvider),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _onBuyCat,
         backgroundColor: const Color(0xFF8DC49A),

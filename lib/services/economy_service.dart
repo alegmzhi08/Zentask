@@ -230,6 +230,15 @@ class EconomyService {
     return true;
   }
 
+  /// Inyecta monedas directamente. Solo para demos y debug.
+  Future<void> addCoins(int amount) async {
+    if (amount <= 0) return;
+    final prefs = _prefs ?? await SharedPreferences.getInstance();
+    balance.value += amount;
+    _statsCoinsEarned += amount;
+    await prefs.setInt(_kZenCoins, balance.value);
+  }
+
   /// Descuenta monedas. Retorna false si el saldo es insuficiente.
   /// Úsalo desde GaticosScreen: `await EconomyService.instance.spendCoins(30)`.
   Future<bool> spendCoins(int amount) async {
