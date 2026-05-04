@@ -11,9 +11,15 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EconomyService.init();
   await SettingsService.init();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    // Si Firebase falla (ej. google-services.json de proyecto incorrecto),
+    // la app arranca igual y muestra el error en consola en lugar de pantalla blanca.
+    debugPrint('[Firebase] Error de inicialización: $e');
+  }
   runApp(const ZentaskApp());
 }
 
